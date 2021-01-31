@@ -15,6 +15,8 @@ func (b *NiaBot) HandleMessage(msg *discordgo.MessageCreate) {
 		switch command {
 		case "addadminrole":
 			b.HandleAddAdminMessage(msg)
+		case "addmanagedrole":
+			b.HandleAddManagedRoleMessage(msg)
 		}
 
 	}

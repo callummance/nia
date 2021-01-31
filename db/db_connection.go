@@ -61,7 +61,14 @@ func (db *DBConnection) CreateTables() error {
 		PrimaryKey: "id",
 	}).RunWrite(db.session)
 	if err != nil {
-		logrus.Errorf("Failed to create guilds table due to error %v", err)
+		logrus.Warnf("Failed to create guilds table due to error %v", err)
+	}
+	//managed role rules table
+	_, err = rethink.TableCreate(guildRolesTable, rethink.TableCreateOpts{
+		PrimaryKey: "id",
+	}).RunWrite(db.session)
+	if err != nil {
+		logrus.Warnf("Failed to create role rules table due to error %v", err)
 	}
 	return nil
 }

@@ -9,6 +9,7 @@ import (
 )
 
 const guildsTable string = "guilds"
+const guildRolesTable string = "managed_roles"
 
 //GetOrCreateGuild fetches a guild with a given ID from the database, creating a new one if it does not exist.
 func (db *DBConnection) GetOrCreateGuild(id string) (*guildmodels.DiscordGuild, error) {

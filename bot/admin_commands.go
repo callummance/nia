@@ -7,14 +7,13 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/callummance/nia/guildmodels"
 	"github.com/sirupsen/logrus"
 )
 
 const discordDevUIDEnvVar string = "NIA_DISCORD_DEV_UID"
 
 const handleAddAdminRoleSyntax string = "`!addadminrole \"<role>\"` or `!addadminrole @<role>"
-
-var regexHandleAddAdminMessage = regexp.MustCompile(`^\s*(<\@\&(\d*)\>)|(\"[^"]*\")|(\w*)\s*$`)
 
 //HandleAddAdminMessage handles a message containing an add admin role command
 //command format: !addadminrole <role>
@@ -37,27 +36,19 @@ func (b *NiaBot) HandleAddAdminMessage(msg *discordgo.MessageCreate) {
 		//Interpret and run the command
 		argString := strings.TrimPrefix(msg.Content, "!addadminrole")
 		argString = strings.TrimLeft(argString, " ")
-		matches := regexHandleAddAdminMessage.FindStringSubmatch(argString)
-		switch {
-		case matches[1] != "":
-			//We have a role id directly
-			rid := matches[2]
-			result = b.addAdminRole(msg.GuildID, rid)
-		case matches[3] != "":
-			//We have a role name
-			roleName := matches[4]
-			result = b.addNamedAdminRole(msg.GuildID, roleName)
-		case matches[5] != "":
-			//We have a role name without quotation marks
-			roleName := matches[4]
-			result = b.addNamedAdminRole(msg.GuildID, roleName)
-		default:
-			//Nothing was provided
-			result = SyntaxError{
-				args:      argString,
-				syntax:    handleAddAdminRoleSyntax,
+		matchingRole, err := b.interpretRoleString(argString, msg.GuildID)
+		if err != nil {
+			result = InternalError{
+				err:       err,
 				timeStamp: time.Now(),
 			}
+		} else if matchingRole == nil {
+			result = RoleNotFound{
+				roleName:  argString,
+				timeStamp: time.Now(),
+			}
+		} else {
+			result = b.addAdminRole(msg.GuildID, matchingRole.ID)
 		}
 	}
 	//Respond
@@ -71,26 +62,6 @@ func (b *NiaBot) HandleAddAdminMessage(msg *discordgo.MessageCreate) {
 	_, err = b.DiscordSession().ChannelMessageSendReply(msg.ChannelID, resp, &msgRef)
 	if err != nil {
 		logrus.Errorf("Failed to send response to command due to error %v", err)
-	}
-}
-
-func (b *NiaBot) addNamedAdminRole(gid string, roleName string) BotResult {
-	guildRoles, err := b.DiscordSession().GuildRoles(gid)
-	if err != nil {
-		logrus.Warnf("Failed to get list of roles for guild %v due to error %v", gid, err)
-		return InternalError{
-			err:       err,
-			timeStamp: time.Now(),
-		}
-	}
-	for _, role := range guildRoles {
-		if role.Name == roleName {
-			return b.addAdminRole(gid, role.ID)
-		}
-	}
-	return RoleNotFound{
-		roleName:  roleName,
-		timeStamp: time.Now(),
 	}
 }
 
@@ -123,9 +94,151 @@ func (b *NiaBot) addAdminRole(gid string, roleID string) BotResult {
 	}
 }
 
+const handleAddManagedRoleSyntax string = "```" +
+	`!addmanagedrole "<role>" <method> [options]
+Options depend on the role assignment method selected as follows:
+
+	!addmanagedrole "<role>" reaction <post> <emoji> <should_clear_after>
+
+		<role> may be the role name enclosed in double quotation marks or an @mention.
+		<post> may be a message link (recommended) or ID of the post (Right click -> copy ID if in developer mode) and channel in the format <channel_id>:<post_id>.
+		<emoji> should be an emoji.
+		<should_clear_after> should be yes/no; yes means that any reactions will be deleted as soon as they are processed.` +
+	"```"
+
+var regexHandleAddManagedRoleMessage = regexp.MustCompile(`^\s*((?:"?<\@\&\d*\>"?)|(?:\"[^"]*\")|(?:\w*))\s*(reaction)\s*(.*)$`)
+
+//HandleAddManagedRoleMessage handles a message starting with the !addmanagedrole command
 //syntax: !addmanagedrole "<role>" <type> [typeopts]
 func (b *NiaBot) HandleAddManagedRoleMessage(msg *discordgo.MessageCreate) {
+	var result BotResult
+	isFromAdmin, err := b.isFromAdmin(msg.Member, msg.Author, msg.GuildID)
+	if err != nil {
+		logrus.Warnf("Failed to check if message came from admin due to error %v", err)
+		result = InternalError{
+			err:       err,
+			timeStamp: time.Now(),
+		}
+	} else if !isFromAdmin {
+		result = CommandNeedsAdmin{
+			command:   "!addmanagedrole",
+			timeStamp: time.Now(),
+		}
+	} else {
+		//Interpret and run the command
+		argString := strings.TrimPrefix(msg.Content, "!addmanagedrole")
+		argString = strings.TrimLeft(argString, " ")
+		matches := regexHandleAddManagedRoleMessage.FindStringSubmatch(argString)
+		if matches == nil {
+			result = SyntaxError{
+				args:      argString,
+				syntax:    handleAddManagedRoleSyntax,
+				timeStamp: time.Now(),
+			}
+		} else {
+			role, err := b.interpretRoleString(matches[1], msg.GuildID)
+			if err != nil {
+				result = InternalError{
+					err:       err,
+					timeStamp: time.Now(),
+				}
+			}
+			opts := matches[3]
+			switch matches[2] {
+			case "reaction":
+				result = b.handleAddReactionManagedRoleMessage(role.ID, opts, msg)
+			}
+		}
+	}
+	//Respond
+	result.WriteToLog()
+	resp := result.DiscordMessage()
+	msgRef := discordgo.MessageReference{
+		MessageID: msg.ID,
+		ChannelID: msg.ChannelID,
+		GuildID:   msg.GuildID,
+	}
+	_, err = b.DiscordSession().ChannelMessageSendReply(msg.ChannelID, resp, &msgRef)
+	if err != nil {
+		logrus.Errorf("Failed to send response to command due to error %v", err)
+	}
 
+}
+
+var addReactionManagedRoleOptsRegex = regexp.MustCompile(`^\s*((?:https://discord\.com/channels/\d+/\d{18}/(?:\d{18}))|(?:\d{18}):(?:\d{18}))\s*((?:<:(?:[^:]+):(?:\d+)>)|(?:\p{S}))\s*(yes|no)\s*$`)
+
+//syntax: !addmamangedrole "<role>" reaction <post> <emoji> <should_clear_after>
+func (b *NiaBot) handleAddReactionManagedRoleMessage(roleID string, opts string, msg *discordgo.MessageCreate) BotResult {
+	matches := addReactionManagedRoleOptsRegex.FindStringSubmatch(opts)
+	if matches == nil {
+		return SyntaxError{
+			args:      msg.Content,
+			syntax:    handleAddManagedRoleSyntax,
+			timeStamp: time.Now(),
+		}
+	}
+	message := matches[1]
+	emote := matches[2]
+	shouldClearAfter := matches[3]
+
+	chanID, msgID := b.interpretMessageRef(message)
+	if chanID == nil || msgID == nil {
+		return InvalidMessageRef{
+			ref:       message,
+			timeStamp: time.Now(),
+		}
+	}
+	emoteID := b.interpretEmoji(emote)
+	if emoteID == nil {
+		return InvalidEmote{
+			emote:     emote,
+			timeStamp: time.Now(),
+		}
+	}
+
+	var shouldClear bool
+	switch shouldClearAfter {
+	case "yes":
+		shouldClear = true
+	case "no":
+		shouldClear = false
+	default:
+		return SyntaxError{
+			args:      msg.Content,
+			syntax:    handleAddManagedRoleSyntax,
+			timeStamp: time.Now(),
+		}
+	}
+
+	reactRoleAssignStruct := guildmodels.ReactionRoleAssign{
+		MsgID:       *msgID,
+		ChanID:      *chanID,
+		EmojiID:     *emoteID,
+		ShouldClear: shouldClear,
+	}
+
+	roleAssignmentStruct := guildmodels.RoleAssignment{
+		AssignmentType:   "reaction",
+		ReactionRoleData: &reactRoleAssignStruct,
+	}
+
+	rule := guildmodels.ManagedRoleRule{
+		RoleID:         roleID,
+		GuildID:        msg.GuildID,
+		RoleAssignment: roleAssignmentStruct,
+	}
+
+	err := b.DBConnection.AddManagedRoleRule(rule)
+	if err != nil {
+		logrus.Warnf("Encountered error %v when trying to add role %v to managed roles on server %v", err, roleID, msg.GuildID)
+		return InternalError{
+			err:       err,
+			timeStamp: time.Now(),
+		}
+	}
+	return ManagedRoleAdded{
+		timeStamp: time.Now(),
+	}
 }
 
 /**************************

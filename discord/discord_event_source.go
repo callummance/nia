@@ -107,4 +107,7 @@ func (d *EventSource) dispatchMessageCreateEvent(s *discordgo.Session, m *discor
 
 	//Dispatch to bot handlers
 	d.handler.HandleMessage(m)
+
+	//For debugging
+	fmt.Printf("Got message `%v`\n", m.Content)
 }

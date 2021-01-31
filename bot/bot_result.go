@@ -39,6 +39,19 @@ func (r AdminRoleAdded) WriteToLog() {
 	logrus.Infof("%v Added role as admin.", logLineLabel(r.timeStamp))
 }
 
+//ManagedRoleAdded represents a successful addition of an managed role
+type ManagedRoleAdded struct {
+	timeStamp time.Time
+}
+
+func (r ManagedRoleAdded) DiscordMessage() string {
+	return fmt.Sprintf("All done!")
+}
+
+func (r ManagedRoleAdded) WriteToLog() {
+	logrus.Infof("%v Added managed role.", logLineLabel(r.timeStamp))
+}
+
 //RoleNotFound indicates that the named role was not found
 type RoleNotFound struct {
 	roleName  string
@@ -51,6 +64,34 @@ func (r RoleNotFound) DiscordMessage() string {
 
 func (r RoleNotFound) WriteToLog() {
 	logrus.Infof("%v Couldn't find role %v.", logLineLabel(r.timeStamp), r.roleName)
+}
+
+//InvalidMessageRef indicates that the provided message could not be found
+type InvalidMessageRef struct {
+	ref       string
+	timeStamp time.Time
+}
+
+func (r InvalidMessageRef) DiscordMessage() string {
+	return fmt.Sprintf("I couldn't find a message at `%v`. It might be worth using a message link in the command. %v", r.ref, writeLogRef(r.timeStamp))
+}
+
+func (r InvalidMessageRef) WriteToLog() {
+	logrus.Infof("%v Couldn't find message %v.", logLineLabel(r.timeStamp), r.ref)
+}
+
+//InvalidEmote indicates that the provided emote could not be found
+type InvalidEmote struct {
+	emote     string
+	timeStamp time.Time
+}
+
+func (r InvalidEmote) DiscordMessage() string {
+	return fmt.Sprintf("I couldn't find the emote `%v`. %v", r.emote, writeLogRef(r.timeStamp))
+}
+
+func (r InvalidEmote) WriteToLog() {
+	logrus.Infof("%v Couldn't find emote %v.", logLineLabel(r.timeStamp), r.emote)
 }
 
 //SyntaxError indicates that we didn't get the arguments we expected

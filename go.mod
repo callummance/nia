@@ -3,6 +3,8 @@ module github.com/callummance/nia
 go 1.15
 
 require (
+	github.com/bitly/go-hostpool v0.1.0 // indirect
+	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869 // indirect
 	github.com/bwmarrin/discordgo v0.23.0
 	github.com/hailocab/go-hostpool v0.0.0-20160125115350-e80d13ce29ed // indirect
 	github.com/joho/godotenv v1.3.0
