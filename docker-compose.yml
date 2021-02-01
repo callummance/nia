@@ -8,7 +8,10 @@ services:
     environment:
       - NIA_DB_ADDR=rethinkdb:28015
       - NIA_DISCORD_BOT_TOKEN
+      - NIA_DB_NAME
+      - NIA_DISCORD_DEV_UID
     depends_on: [rethinkdb]
+    restart: unless-stopped
 
   rethinkdb:
     image: rethinkdb
@@ -16,3 +19,4 @@ services:
       - type: bind
         source: ~/nia_db_data
         target: /data
+    restart: unless-stopped
