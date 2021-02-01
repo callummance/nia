@@ -9,7 +9,8 @@ import (
 )
 
 const dbAddrEnvVar string = "NIA_DB_ADDR"
-const dbName string = "test"
+const dbNameDefault string = "nia"
+const dbNameEnvVar string = "NIA_DB_NAME"
 const baseDbPoolConnections int = 2
 const maxDbPoolConnections int = 20
 
@@ -19,6 +20,12 @@ type DBConnection struct {
 
 //Init creates a new connection pool for the database at the address provided by the relevant environment variable
 func Init() (*DBConnection, error) {
+	//Get DB name from env
+	dbName, exists := os.LookupEnv(dbNameEnvVar)
+	if !exists {
+		logrus.Warnf("DB name was not provided, falling back to default `%v`", dbNameDefault)
+		dbName = dbNameDefault
+	}
 	//Get DB address from env
 	rethinkDBAddr, exists := os.LookupEnv(dbAddrEnvVar)
 	if !exists {
@@ -40,10 +47,10 @@ func Init() (*DBConnection, error) {
 	res := DBConnection{
 		session: session,
 	}
-	err = res.CreateTables()
-	if err != nil {
-		return nil, err
-	}
+
+	//Ensure database and required tables exist
+	res.CreateDatabase(dbName)
+	res.CreateTables()
 
 	return &res, nil
 }
@@ -55,7 +62,7 @@ func (db *DBConnection) Close() {
 }
 
 //CreateTables ensures all tables needed exist.
-func (db *DBConnection) CreateTables() error {
+func (db *DBConnection) CreateTables() {
 	//guilds table
 	_, err := rethink.TableCreate(guildsTable, rethink.TableCreateOpts{
 		PrimaryKey: "id",
@@ -70,5 +77,12 @@ func (db *DBConnection) CreateTables() error {
 	if err != nil {
 		logrus.Warnf("Failed to create role rules table due to error %v", err)
 	}
-	return nil
+}
+
+//CreateDatabase ensures the nia database exists
+func (db *DBConnection) CreateDatabase(dbName string) {
+	_, err := rethink.DBCreate(dbName).RunWrite(db.session)
+	if err != nil {
+		logrus.Warnf("Failed to create %v DB due to error %v", dbName, err)
+	}
 }
