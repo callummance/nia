@@ -16,6 +16,8 @@ const permissions = discordgo.PermissionAllText | discordgo.PermissionAllChannel
 //EventHandler is a struct which can handle all the events the discord listener generates.
 type EventHandler interface {
 	HandleMessage(*discordgo.MessageCreate)
+	HandleReactionAdd(*discordgo.MessageReaction)
+	HandleReactionRemove(*discordgo.MessageReaction)
 }
 
 //EventSource represents a connection to the Discord gateway
@@ -46,6 +48,8 @@ func StartDiscordListener(handler EventHandler) (*EventSource, error) {
 
 	//Register event handlers
 	dc.AddHandler(dispatch.dispatchMessageCreateEvent)
+	dc.AddHandler(dispatch.dispatchMessageReactionAddEvent)
+	dc.AddHandler(dispatch.dispatchMessageReactionRemoveEvent)
 
 	//Register intents
 	dc.Identify.Intents = discordgo.IntentsGuildMessages | discordgo.IntentsGuildMessageReactions
@@ -110,4 +114,34 @@ func (d *EventSource) dispatchMessageCreateEvent(s *discordgo.Session, m *discor
 
 	//For debugging
 	fmt.Printf("Got message `%v`\n", m.Content)
+}
+
+func (d *EventSource) dispatchMessageReactionAddEvent(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
+	//Prevent panic from crashing the whole bot
+	defer func() {
+		if r := recover(); r != nil {
+			logrus.Errorf("Bot handler thread panicked: %v", r)
+		}
+	}()
+
+	//Dispatch to bot handlers
+	d.handler.HandleReactionAdd(r.MessageReaction)
+
+	//debugging
+	logrus.Debugf("Got reaction `%v`\n", r)
+}
+
+func (d *EventSource) dispatchMessageReactionRemoveEvent(s *discordgo.Session, r *discordgo.MessageReactionRemove) {
+	//Prevent panic from crashing the whole bot
+	defer func() {
+		if r := recover(); r != nil {
+			logrus.Errorf("Bot handler thread panicked: %v", r)
+		}
+	}()
+
+	//Dispatch to bot handlers
+	d.handler.HandleReactionRemove(r.MessageReaction)
+
+	//debugging
+	logrus.Debugf("Removed reaction `%#v`\n", *r.MessageReaction)
 }
