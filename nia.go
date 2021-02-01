@@ -14,7 +14,7 @@ import (
 func main() {
 	err := godotenv.Load()
 	if err != nil {
-		logrus.Fatalf("Failed to load .env file due to error %v", err)
+		logrus.Warnf("Failed to load .env file due to error %v", err)
 	}
 	bot, err := bot.Init()
 	if err != nil {

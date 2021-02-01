@@ -1,0 +1,18 @@
+version: "3.9"
+services: 
+  nia:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nia
+    environment:
+      - NIA_DB_ADDR=rethinkdb:28015
+      - NIA_DISCORD_BOT_TOKEN
+    depends_on: [rethinkdb]
+
+  rethinkdb:
+    image: rethinkdb
+    volumes: 
+      - type: bind
+        source: ~/nia_db_data
+        target: /data
