@@ -165,7 +165,7 @@ func (b *NiaBot) HandleAddManagedRoleMessage(msg *discordgo.MessageCreate) {
 
 }
 
-var addReactionManagedRoleOptsRegex = regexp.MustCompile(`^\s*((?:https://discord\.com/channels/\d+/\d{18}/(?:\d{18}))|(?:\d{18}):(?:\d{18}))\s*((?:<:(?:[^:]+):(?:\d+)>)|(?:\p{S}))\s*(yes|no)\s*$`)
+var addReactionManagedRoleOptsRegex = regexp.MustCompile(`^\s*((?:https://discord\.com/channels/\d+/\d{18}/(?:\d{18}))|(?:\d{18}):(?:\d{18}))\s*((?:<:(?:[^:]+):(?:\d+)>)|(?:\p{S}))\W*(yes|no)\s*$`)
 
 //syntax: !addmamangedrole "<role>" reaction <post> <emoji> <should_clear_after>
 func (b *NiaBot) handleAddReactionManagedRoleMessage(roleID string, opts string, msg *discordgo.MessageCreate) BotResult {
