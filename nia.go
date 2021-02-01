@@ -12,6 +12,8 @@ import (
 )
 
 func main() {
+	logrus.SetLevel(logrus.DebugLevel)
+
 	err := godotenv.Load()
 	if err != nil {
 		logrus.Warnf("Failed to load .env file due to error %v", err)

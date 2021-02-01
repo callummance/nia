@@ -128,7 +128,7 @@ func (d *EventSource) dispatchMessageReactionAddEvent(s *discordgo.Session, r *d
 	d.handler.HandleReactionAdd(r.MessageReaction)
 
 	//debugging
-	logrus.Debugf("Got reaction `%v`\n", r)
+	logrus.Debugf("Got reaction `%#v`\n", r.MessageReaction)
 }
 
 func (d *EventSource) dispatchMessageReactionRemoveEvent(s *discordgo.Session, r *discordgo.MessageReactionRemove) {

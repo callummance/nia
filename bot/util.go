@@ -55,7 +55,10 @@ func (b *NiaBot) interpretRoleString(roleStr string, guildID string) (*discordgo
 }
 
 //This is kind of a mess and waay too greedy but the symbol other category doesn't seem to work with RE2 so eh ¯\_(ツ)_/¯
-var emojiRegex = regexp.MustCompile(`(?:<:([^:]+):(\d+)>)|(\p{S})`)
+//TODO: replace this with something better
+const unicodeEmojiRegex = `(\S{1,4})`
+
+var emojiRegex = regexp.MustCompile(`(?:<:([^:]+):(\d+)>)|` + unicodeEmojiRegex)
 
 func (b *NiaBot) interpretEmoji(emojiStr string) *string {
 	matches := emojiRegex.FindStringSubmatch(emojiStr)

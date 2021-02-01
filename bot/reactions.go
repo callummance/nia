@@ -23,6 +23,7 @@ func (b *NiaBot) HandleReactionRemove(reaction *discordgo.MessageReaction) {
 func (b *NiaBot) addReactionRole(reaction *discordgo.MessageReaction) {
 	matchingRules, _ := b.checkReactionAssociatedRole(reaction)
 	if matchingRules == nil {
+		logrus.Debugf("Didn't find any matches for reaction %#v", reaction)
 		return
 	}
 	for _, matchingRole := range matchingRules {
@@ -70,6 +71,7 @@ func (b *NiaBot) checkReactionAssociatedRole(reaction *discordgo.MessageReaction
 	} else {
 		emojiIdentifier = reaction.Emoji.ID
 	}
+	logrus.Debugf("Looking up Reaction associated Role for %v", emojiIdentifier)
 	roles, err := b.DBConnection.LookupRolesByEmote(reaction.MessageID, reaction.ChannelID, reaction.GuildID, emojiIdentifier)
 	if err != nil {
 		logrus.Warnf("Failed to lookup role assignment by Reaction; encountered error %v", err)

@@ -24,7 +24,7 @@ func (db *DBConnection) AddManagedRoleRule(rule guildmodels.ManagedRoleRule) err
 //LookupRolesByEmote takes a message ID as well as its channel and guild, along with an emoji ID.
 //It then returns any managed role rules that include that reaction.
 func (db *DBConnection) LookupRolesByEmote(msgID string, chanID string, guildID string, emojiID string) ([]guildmodels.ManagedRoleRule, error) {
-	query := rethink.Table(guildRolesTable).Filter(map[string]interface{}{
+	filter := map[string]interface{}{
 		"guild_id": guildID,
 		"role_assignment": map[string]interface{}{
 			"type": "reaction",
@@ -34,7 +34,9 @@ func (db *DBConnection) LookupRolesByEmote(msgID string, chanID string, guildID 
 				"emoji_id":   emojiID,
 			},
 		},
-	})
+	}
+	logrus.Debugf("Looking up role by emote with filter %#v", filter)
+	query := rethink.Table(guildRolesTable).Filter(filter)
 	res, err := query.Run(db.session)
 	defer res.Close()
 	if err != nil {
