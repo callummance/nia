@@ -18,3 +18,6 @@ nia
 
 # config file
 .env
+
+# secret file
+ssh_pass.conf

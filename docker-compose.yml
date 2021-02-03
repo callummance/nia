@@ -20,3 +20,24 @@ services:
         source: ~/nia_db_data
         target: /data
     restart: unless-stopped
+
+  openssh-server:
+    image: linuxserver/openssh-server
+    environment:
+      - PUID=1000
+      - GUID=1000
+      - TZ=Europe/London
+      - PASSWORD_ACCESS=true
+      - USER_NAME=nia
+      - USER_PASSWORD_FILE=/run/secrets/ssh_password
+    volumes:
+      - ./container-scripts/enable_portforward.sh:/config/custom-cont-init.d/pf.sh
+    ports:
+      - 2222:2222
+    restart: unless-stopped
+    secrets:
+      - ssh_password
+
+secrets:
+  ssh_password:
+    file: "./ssh_pass.conf"
