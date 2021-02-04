@@ -17,6 +17,8 @@ func (b *NiaBot) HandleMessage(msg *discordgo.MessageCreate) {
 			b.HandleAddAdminMessage(msg)
 		case "addmanagedrole":
 			b.HandleAddManagedRoleMessage(msg)
+		case "initreactions":
+			b.HandleInitReactionsMessage(msg)
 		}
 
 	}

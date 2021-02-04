@@ -117,6 +117,12 @@ func (d *EventSource) dispatchMessageCreateEvent(s *discordgo.Session, m *discor
 }
 
 func (d *EventSource) dispatchMessageReactionAddEvent(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
+	//Ignore reactions from bot
+	if r.UserID == s.State.User.ID {
+		logrus.Debug("Got ReactionAdd from self; Ignoring.")
+		return
+	}
+
 	//Prevent panic from crashing the whole bot
 	defer func() {
 		if r := recover(); r != nil {
@@ -132,6 +138,12 @@ func (d *EventSource) dispatchMessageReactionAddEvent(s *discordgo.Session, r *d
 }
 
 func (d *EventSource) dispatchMessageReactionRemoveEvent(s *discordgo.Session, r *discordgo.MessageReactionRemove) {
+	//Ignore reactions from bot
+	if r.UserID == s.State.User.ID {
+		logrus.Debug("Got ReactionRemove from self; Ignoring.")
+		return
+	}
+
 	//Prevent panic from crashing the whole bot
 	defer func() {
 		if r := recover(); r != nil {

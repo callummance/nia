@@ -54,3 +54,35 @@ func (db *DBConnection) LookupRolesByEmote(msgID string, chanID string, guildID 
 	}
 	return matchingRoleRules, nil
 }
+
+//GetGuildRolesWithInitialReact takes a guild ID and returns a slice of all role assignment rules for that server
+//that both use reactions for role assignment and for which the bost should make an initial reaction.
+func (db *DBConnection) GetGuildRolesWithInitialReact(guildID string) ([]guildmodels.ManagedRoleRule, error) {
+	filter := map[string]interface{}{
+		"guild_id": guildID,
+		"role_assignment": map[string]interface{}{
+			"type": "reaction",
+			"reaction_opts": map[string]interface{}{
+				"bot_should_react": true,
+			},
+		},
+	}
+	logrus.Debugf("Looking up role by emote with filter %#v", filter)
+	query := rethink.Table(guildRolesTable).Filter(filter)
+	res, err := query.Run(db.session)
+	defer res.Close()
+	if err != nil {
+		logrus.Warnf("Encountered error looking up roles with initial reaction for guild %v: %v.", guildID, err)
+		return nil, err
+	}
+	var matchingRoleRules []guildmodels.ManagedRoleRule
+	if res.IsNil() {
+		return nil, nil
+	}
+	err = res.All(&matchingRoleRules)
+	if err != nil {
+		logrus.Warnf("Encountered error looking up roles with initial reaction for guild %v: %v.", guildID, err)
+		return nil, err
+	}
+	return matchingRoleRules, nil
+}

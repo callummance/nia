@@ -19,6 +19,6 @@ type ReactionRoleAssign struct {
 	ChanID               string `gorethink:"channel_id"`
 	EmojiID              string `gorethink:"emoji_id"`
 	ShouldClear          bool   `gorethink:"should_clear_after"`
-	BotShouldReact       bool   `gorethink:"bot_shoud_react"`
+	BotShouldReact       bool   `gorethink:"bot_should_react"`
 	DisallowRoleRemoveal bool   `gorethink:"disallow_role_removal"`
 }
