@@ -98,12 +98,15 @@ const handleAddManagedRoleSyntax string = "```" +
 	`!addmanagedrole "<role>" <method> [options]
 Options depend on the role assignment method selected as follows:
 
-	!addmanagedrole "<role>" reaction <post> <emoji> <should_clear_after>
+	!addmanagedrole "<role>" reaction <post> <emoji> [flags] 
 
 		<role> may be the role name enclosed in double quotation marks or an @mention.
 		<post> may be a message link (recommended) or ID of the post (Right click -> copy ID if in developer mode) and channel in the format <channel_id>:<post_id>.
 		<emoji> should be an emoji.
-		<should_clear_after> should be yes/no; yes means that any reactions will be deleted as soon as they are processed.` +
+		[flags] can be any number of optional flags from the following: 
+			"clearafter": Remove reaction after assigningthe role
+			"initialreact": Bot should create an initial reaction
+			"noremove": Bot should not remove role if reaction is removed` +
 	"```"
 
 var regexHandleAddManagedRoleMessage = regexp.MustCompile(`^\s*((?:"?<\@\&\d*\>"?)|(?:\"[^"]*\")|(?:\w*))\s*(reaction)\s*(.*)$`)
@@ -165,9 +168,9 @@ func (b *NiaBot) HandleAddManagedRoleMessage(msg *discordgo.MessageCreate) {
 
 }
 
-var addReactionManagedRoleOptsRegex = regexp.MustCompile(`^\s*((?:https://discord\.com/channels/\d+/\d{18}/(?:\d{18}))|(?:\d{18}):(?:\d{18}))\s*((?:<:(?:[^:]+):(?:\d+)>)|(?:\S{1,4}))\s*(yes|no)\s*$`)
+var addReactionManagedRoleOptsRegex = regexp.MustCompile(`^\s*((?:https://discord\.com/channels/\d+/\d{18}/(?:\d{18}))|(?:\d{18}):(?:\d{18}))\s*((?:<a?:(?:[^:]+):(?:\d+)>)|(?:\S{1,4}))\s*((?:clearafter|initialreact|noremove)\s*)\s*$`)
 
-//syntax: !addmamangedrole "<role>" reaction <post> <emoji> <should_clear_after>
+//syntax: !addmamangedrole "<role>" reaction <post> <emoji> [flags]
 func (b *NiaBot) handleAddReactionManagedRoleMessage(roleID string, opts string, msg *discordgo.MessageCreate) BotResult {
 	matches := addReactionManagedRoleOptsRegex.FindStringSubmatch(opts)
 	if matches == nil {
@@ -179,7 +182,7 @@ func (b *NiaBot) handleAddReactionManagedRoleMessage(roleID string, opts string,
 	}
 	message := matches[1]
 	emote := matches[2]
-	shouldClearAfter := matches[3]
+	flags := strings.Split(matches[3], " ")
 
 	chanID, msgID := b.interpretMessageRef(message)
 	if chanID == nil || msgID == nil {
@@ -197,24 +200,35 @@ func (b *NiaBot) handleAddReactionManagedRoleMessage(roleID string, opts string,
 	}
 
 	var shouldClear bool
-	switch shouldClearAfter {
-	case "yes":
-		shouldClear = true
-	case "no":
-		shouldClear = false
-	default:
-		return SyntaxError{
-			args:      msg.Content,
-			syntax:    handleAddManagedRoleSyntax,
-			timeStamp: time.Now(),
+	var initialReact bool
+	var noRemove bool
+	for _, flag := range flags {
+		switch flag {
+		case "clearafter":
+			shouldClear = true
+		case "initialreact":
+			initialReact = true
+			//Add reaction
+			err := b.DiscordSession().MessageReactionAdd(*chanID, *msgID, *emoteID)
+			if err != nil {
+				logrus.Error("Failed to add initial emote %v to message %v due to error %v", emoteID, msgID, err)
+			}
+		case "noremove":
+			noRemove = true
+		case "":
+			continue
+		default:
+			logrus.Warnf("Got unexpected flag for reaction role assignment add: %v", flag)
 		}
 	}
 
 	reactRoleAssignStruct := guildmodels.ReactionRoleAssign{
-		MsgID:       *msgID,
-		ChanID:      *chanID,
-		EmojiID:     *emoteID,
-		ShouldClear: shouldClear,
+		MsgID:                *msgID,
+		ChanID:               *chanID,
+		EmojiID:              *emoteID,
+		ShouldClear:          shouldClear,
+		BotShouldReact:       initialReact,
+		DisallowRoleRemoveal: noRemove,
 	}
 
 	roleAssignmentStruct := guildmodels.RoleAssignment{

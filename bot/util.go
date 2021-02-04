@@ -58,7 +58,7 @@ func (b *NiaBot) interpretRoleString(roleStr string, guildID string) (*discordgo
 //TODO: replace this with something better
 const unicodeEmojiRegex = `(\S{1,4})`
 
-var emojiRegex = regexp.MustCompile(`(?:<:([^:]+):(\d+)>)|` + unicodeEmojiRegex)
+var emojiRegex = regexp.MustCompile(`(<(a?):([^:]+):(\d+)>)|` + unicodeEmojiRegex)
 
 func (b *NiaBot) interpretEmoji(emojiStr string) *string {
 	matches := emojiRegex.FindStringSubmatch(emojiStr)
@@ -67,10 +67,14 @@ func (b *NiaBot) interpretEmoji(emojiStr string) *string {
 		return nil
 	case matches[1] != "":
 		//Discord guild emoji
-		return &matches[2]
-	case matches[3] != "":
+		_ /*animatedFlag*/ = matches[2]
+		name := matches[3]
+		id := matches[4]
+		apiName := fmt.Sprintf("%v:%v", name, id)
+		return &apiName
+	case matches[5] != "":
 		//Unicode emoji
-		return &matches[3]
+		return &matches[5]
 	default:
 		return nil
 	}

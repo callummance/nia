@@ -11,7 +11,14 @@
             "mode": "debug",
             "program": "${workspaceFolder}",
             "env": {},
-            "args": []
+            "args": [],
+            "dlvLoadConfig": {
+                "followPointers": true,
+                "maxVariableRecurse": 1,
+                "maxStringLen": 512,
+                "maxArrayValues": 64,
+                "maxStructFields": -1
+            }
         }
     ]
 }

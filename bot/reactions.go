@@ -50,8 +50,9 @@ func (b *NiaBot) removeReactionRole(reaction *discordgo.MessageReaction) {
 		return
 	}
 	for _, matchingRole := range matchingRules {
-		if matchingRole.RoleAssignment.ReactionRoleData.ShouldClear {
+		if matchingRole.RoleAssignment.ReactionRoleData.ShouldClear || matchingRole.RoleAssignment.ReactionRoleData.DisallowRoleRemoveal {
 			//If we are supposed to automatically remove reactions, does not make sense to remove role too
+			//Also skip removing role if it has been specifically disallowed
 			continue
 		}
 		logrus.Infof("Removing role %v for user %v based on their reaction.", matchingRole.RoleID, reaction.UserID)

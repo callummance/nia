@@ -15,8 +15,10 @@ type RoleAssignment struct {
 
 //ReactionRoleAssign represents a role assignment prompted by reacting to a post
 type ReactionRoleAssign struct {
-	MsgID       string `gorethink:"message_id"`
-	ChanID      string `gorethink:"channel_id"`
-	EmojiID     string `gorethink:"emoji_id"`
-	ShouldClear bool   `gorethink:"should_clear_after"`
+	MsgID                string `gorethink:"message_id"`
+	ChanID               string `gorethink:"channel_id"`
+	EmojiID              string `gorethink:"emoji_id"`
+	ShouldClear          bool   `gorethink:"should_clear_after"`
+	BotShouldReact       bool   `gorethink:"bot_shoud_react"`
+	DisallowRoleRemoveal bool   `gorethink:"disallow_role_removal"`
 }
