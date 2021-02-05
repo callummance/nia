@@ -168,7 +168,7 @@ func (b *NiaBot) HandleAddManagedRoleMessage(msg *discordgo.MessageCreate) {
 
 }
 
-var addReactionManagedRoleOptsRegex = regexp.MustCompile(`^\s*((?:https://discord\.com/channels/\d+/\d{18}/(?:\d{18}))|(?:\d{18}):(?:\d{18}))\s*((?:<a?:(?:[^:]+):(?:\d+)>)|(?:\S{1,4}))\s*((?:clearafter|initialreact|noremove)\s*)\s*$`)
+var addReactionManagedRoleOptsRegex = regexp.MustCompile(`^\s*((?:https://discord\.com/channels/\d+/\d{18}/(?:\d{18}))|(?:\d{18}):(?:\d{18}))\s*((?:<a?:(?:[^:]+):(?:\d+)>)|(?:\S{1,4}))\s*((?:(?:clearafter|initialreact|noremove)\s*)*)\s*$`)
 
 //syntax: !addmamangedrole "<role>" reaction <post> <emoji> [flags]
 func (b *NiaBot) handleAddReactionManagedRoleMessage(roleID string, opts string, msg *discordgo.MessageCreate) BotResult {
@@ -258,6 +258,57 @@ func (b *NiaBot) handleAddReactionManagedRoleMessage(roleID string, opts string,
 //HandleInitReactionsMessage handles a message containing an add initial reactions command
 //command format: !initreactions
 func (b *NiaBot) HandleInitReactionsMessage(msg *discordgo.MessageCreate) {
+	var result BotResult
+	//Check sender is admin
+	isFromAdmin, err := b.isFromAdmin(msg.Member, msg.Author, msg.GuildID)
+	if err != nil {
+		logrus.Warnf("Failed to check if message came from admin due to error %v", err)
+		result = InternalError{
+			err:       err,
+			timeStamp: time.Now(),
+		}
+	} else if !isFromAdmin {
+		result = CommandNeedsAdmin{
+			command:   "!addadminrole",
+			timeStamp: time.Now(),
+		}
+	} else {
+		//Run the command
+		relevantRoles, err := b.DBConnection.GetGuildRolesWithInitialReact(msg.GuildID)
+		if err != nil {
+			result = InternalError{
+				err:       err,
+				timeStamp: time.Now(),
+			}
+		} else {
+			for _, role := range relevantRoles {
+				chanID := role.RoleAssignment.ReactionRoleData.ChanID
+				msgID := role.RoleAssignment.ReactionRoleData.MsgID
+				emoteID := role.RoleAssignment.ReactionRoleData.EmojiID
+				err := b.DiscordSession().MessageReactionAdd(chanID, msgID, emoteID)
+				if err != nil {
+					logrus.Error("Failed to add initial emote %v to message %v due to error %v", emoteID, msgID, err)
+				}
+			}
+		}
+	}
+	//Respond
+	result.WriteToLog()
+	resp := result.DiscordMessage()
+	msgRef := discordgo.MessageReference{
+		MessageID: msg.ID,
+		ChannelID: msg.ChannelID,
+		GuildID:   msg.GuildID,
+	}
+	_, err = b.DiscordSession().ChannelMessageSendReply(msg.ChannelID, resp, &msgRef)
+	if err != nil {
+		logrus.Errorf("Failed to send response to command due to error %v", err)
+	}
+}
+
+//HandlePurgeRoleMessage handles a message containing a purge role command
+//command format: !purgerole <role>
+func (b *NiaBot) HandlePurgeRoleMessage(msg *discordgo.MessageCreate) {
 	var result BotResult
 	//Check sender is admin
 	isFromAdmin, err := b.isFromAdmin(msg.Member, msg.Author, msg.GuildID)
