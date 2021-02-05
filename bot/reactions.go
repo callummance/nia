@@ -65,13 +65,7 @@ func (b *NiaBot) removeReactionRole(reaction *discordgo.MessageReaction) {
 }
 
 func (b *NiaBot) checkReactionAssociatedRole(reaction *discordgo.MessageReaction) ([]guildmodels.ManagedRoleRule, error) {
-	var emojiIdentifier string
-	if reaction.Emoji.ID == "" {
-		//Built in emojis don't have their own ID
-		emojiIdentifier = reaction.Emoji.Name
-	} else {
-		emojiIdentifier = reaction.Emoji.ID
-	}
+	emojiIdentifier := reaction.Emoji.APIName()
 	logrus.Debugf("Looking up Reaction associated Role for %v", emojiIdentifier)
 	roles, err := b.DBConnection.LookupRolesByEmote(reaction.MessageID, reaction.ChannelID, reaction.GuildID, emojiIdentifier)
 	if err != nil {
