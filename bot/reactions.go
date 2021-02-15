@@ -74,3 +74,19 @@ func (b *NiaBot) checkReactionAssociatedRole(reaction *discordgo.MessageReaction
 	}
 	return roles, nil
 }
+
+func (b *NiaBot) resetAssignmentReactions(rule *guildmodels.ReactionRoleAssign) error {
+	err := b.DiscordSession().MessageReactionsRemoveEmoji(rule.ChanID, rule.MsgID, rule.EmojiID)
+	if err != nil {
+		logrus.Warn("Failed to remove reactions of emoji %v to message %v:%v due to error %v.", rule.EmojiID, rule.ChanID, rule.MsgID, err)
+		return err
+	}
+	if rule.BotShouldReact {
+		//Add initial reaction
+		err := b.DiscordSession().MessageReactionAdd(rule.ChanID, rule.MsgID, rule.EmojiID)
+		if err != nil {
+			logrus.Error("Failed to readd initial emote %v to message %v due to error %v", rule.EmojiID, rule.MsgID, err)
+		}
+	}
+	return nil
+}

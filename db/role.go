@@ -67,7 +67,7 @@ func (db *DBConnection) GetGuildRolesWithInitialReact(guildID string) ([]guildmo
 			},
 		},
 	}
-	logrus.Debugf("Looking up role by emote with filter %#v", filter)
+	logrus.Debugf("Looking up roles with initial react with filter %#v", filter)
 	query := rethink.Table(guildRolesTable).Filter(filter)
 	res, err := query.Run(db.session)
 	defer res.Close()
@@ -85,4 +85,50 @@ func (db *DBConnection) GetGuildRolesWithInitialReact(guildID string) ([]guildmo
 		return nil, err
 	}
 	return matchingRoleRules, nil
+}
+
+//GetRoleRules returns all role assignment rules for a given role in a given server
+func (db *DBConnection) GetRoleRules(guildID string, roleID string) ([]guildmodels.ManagedRoleRule, error) {
+	filter := map[string]interface{}{
+		"guild_id": guildID,
+		"role_id":  roleID,
+	}
+	logrus.Debugf("Looking up rules by role with filter %#v", filter)
+	query := rethink.Table(guildRolesTable).Filter(filter)
+	res, err := query.Run(db.session)
+	defer res.Close()
+	if err != nil {
+		logrus.Warnf("Encountered error looking up rules for role %v in guild %v: %v.", roleID, guildID, err)
+		return nil, err
+	}
+	var matchingRoleRules []guildmodels.ManagedRoleRule
+	if res.IsNil() {
+		return nil, nil
+	}
+	err = res.All(&matchingRoleRules)
+	if err != nil {
+		logrus.Warnf("Encountered error looking up rules for role %v in guild %v: %v.", roleID, guildID, err)
+		return nil, err
+	}
+	return matchingRoleRules, nil
+}
+
+//IsManagedRole returns true iff we have any rules stored for the given roleID in the given guildID
+func (db *DBConnection) IsManagedRole(guildID string, roleID string) (bool, error) {
+	filter := map[string]interface{}{
+		"guild_id": guildID,
+		"role_id":  roleID,
+	}
+	logrus.Debugf("Looking up rules by role with filter %#v", filter)
+	query := rethink.Table(guildRolesTable).Filter(filter)
+	res, err := query.Run(db.session)
+	defer res.Close()
+	if err != nil {
+		logrus.Warnf("Encountered error looking up rules for role %v in guild %v: %v.", roleID, guildID, err)
+		return false, err
+	}
+	if res.IsNil() {
+		return true, nil
+	}
+	return false, nil
 }

@@ -2,6 +2,7 @@ package bot
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -120,7 +121,7 @@ func (r InternalError) DiscordMessage() string {
 }
 
 func (r InternalError) WriteToLog() {
-	logrus.Warnf("%v Encountered critical database error %v.", logLineLabel(r.timeStamp), r.err)
+	logrus.Warnf("%v Encountered critical interal error %v.", logLineLabel(r.timeStamp), r.err)
 }
 
 //CommandNeedsAdmin indicates an admin-restricted command was attempted by a non-admin
@@ -135,6 +136,53 @@ func (r CommandNeedsAdmin) DiscordMessage() string {
 
 func (r CommandNeedsAdmin) WriteToLog() {
 	logrus.Infof("%v Rejected admin command %v.", logLineLabel(r.timeStamp), r.command)
+}
+
+//RoleReset indicates a managed role has been successfully reset
+type RoleReset struct {
+	roleID    string
+	roleName  string
+	timeStamp time.Time
+}
+
+func (r RoleReset) DiscordMessage() string {
+	return fmt.Sprintf("All done!")
+}
+
+func (r RoleReset) WriteToLog() {
+	logrus.Infof("%v Reset role %v.", logLineLabel(r.timeStamp), r.roleID)
+}
+
+type PartialRoleReset struct {
+	failedMembers []failedRoleRemoval
+	failedRules   []failedRoleRuleReset
+	roleID        string
+	roleName      string
+	timeStamp     time.Time
+}
+
+func (r PartialRoleReset) DiscordMessage() string {
+	var b strings.Builder
+	fmt.Fprintf(&b, ">>>Role %v was reset, but a couple things went wrong.\n", r.roleName)
+	if r.failedMembers != nil {
+		fmt.Fprintf(&b, "%d members (", len(r.failedMembers))
+		for i, failedMember := range r.failedMembers {
+			fmt.Fprintf(&b, "%v", failedMember.member.Nick)
+			if i < len(r.failedMembers) {
+				fmt.Fprint(&b, ", ")
+			}
+		}
+		fmt.Fprint(&b, ") could not have their roles removed.\n")
+	}
+	if r.failedRules != nil {
+		fmt.Fprint(&b, "Also encountered an issue resetting some role assignment methods.\n")
+	}
+	fmt.Fprint(&b, writeLogRef(r.timeStamp))
+	return b.String()
+}
+
+func (r PartialRoleReset) WriteToLog() {
+	logrus.Infof("%v Reset role %v with issues. Failed members: %v, Failed rules: %v", logLineLabel(r.timeStamp), r.roleID, r.failedMembers, r.failedRules)
 }
 
 /////////////////////

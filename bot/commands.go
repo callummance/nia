@@ -19,6 +19,8 @@ func (b *NiaBot) HandleMessage(msg *discordgo.MessageCreate) {
 			b.HandleAddManagedRoleMessage(msg)
 		case "initreactions":
 			b.HandleInitReactionsMessage(msg)
+		case "purgerole":
+			b.HandlePurgeRoleMessage(msg)
 		}
 
 	}

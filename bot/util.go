@@ -5,6 +5,7 @@ import (
 	"regexp"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/callummance/nia/guildmodels"
 	"github.com/sirupsen/logrus"
 )
 
@@ -96,5 +97,15 @@ func (b *NiaBot) interpretMessageRef(messageStr string) (*string, *string) {
 		return &matches[3], &matches[4]
 	default:
 		return nil, nil
+	}
+}
+
+func (b *NiaBot) undoRoleRule(rule *guildmodels.RoleAssignment) error {
+	switch rule.AssignmentType {
+	case "reaction":
+		return b.resetAssignmentReactions(rule.ReactionRoleData)
+	default:
+		//noop
+		return nil
 	}
 }

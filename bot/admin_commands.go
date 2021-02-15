@@ -320,25 +320,52 @@ func (b *NiaBot) HandlePurgeRoleMessage(msg *discordgo.MessageCreate) {
 		}
 	} else if !isFromAdmin {
 		result = CommandNeedsAdmin{
-			command:   "!addadminrole",
+			command:   "!purgerole",
 			timeStamp: time.Now(),
 		}
 	} else {
-		//Run the command
-		relevantRoles, err := b.DBConnection.GetGuildRolesWithInitialReact(msg.GuildID)
+		argString := strings.TrimPrefix(msg.Content, "!purgerole")
+		argString = strings.TrimLeft(argString, " ")
+		matchingRole, err := b.interpretRoleString(argString, msg.GuildID)
 		if err != nil {
 			result = InternalError{
 				err:       err,
 				timeStamp: time.Now(),
 			}
+		} else if matchingRole == nil {
+			result = RoleNotFound{
+				roleName:  argString,
+				timeStamp: time.Now(),
+			}
 		} else {
-			for _, role := range relevantRoles {
-				chanID := role.RoleAssignment.ReactionRoleData.ChanID
-				msgID := role.RoleAssignment.ReactionRoleData.MsgID
-				emoteID := role.RoleAssignment.ReactionRoleData.EmojiID
-				err := b.DiscordSession().MessageReactionAdd(chanID, msgID, emoteID)
-				if err != nil {
-					logrus.Error("Failed to add initial emote %v to message %v due to error %v", emoteID, msgID, err)
+			isManaged, err := b.DBConnection.IsManagedRole(msg.GuildID, matchingRole.ID)
+			if err != nil {
+				result = InternalError{
+					err:       err,
+					timeStamp: time.Now(),
+				}
+			} else if !isManaged {
+
+			}
+			problemMembers, problemRules, err := b.doRolePurge(msg.Message, matchingRole)
+			if err != nil {
+				result = InternalError{
+					err:       err,
+					timeStamp: time.Now(),
+				}
+			} else if problemMembers == nil && problemRules == nil {
+				result = RoleReset{
+					roleID:    matchingRole.ID,
+					roleName:  matchingRole.Name,
+					timeStamp: time.Now(),
+				}
+			} else {
+				result = PartialRoleReset{
+					failedMembers: problemMembers,
+					failedRules:   problemRules,
+					roleID:        matchingRole.ID,
+					roleName:      matchingRole.Name,
+					timeStamp:     time.Now(),
 				}
 			}
 		}
@@ -355,6 +382,67 @@ func (b *NiaBot) HandlePurgeRoleMessage(msg *discordgo.MessageCreate) {
 	if err != nil {
 		logrus.Errorf("Failed to send response to command due to error %v", err)
 	}
+}
+
+type failedRoleRemoval struct {
+	member *discordgo.Member
+	err    error
+}
+
+type failedRoleRuleReset struct {
+	rule *guildmodels.ManagedRoleRule
+	err  error
+}
+
+//Returns a list of members whose role could not be removed
+func (b *NiaBot) doRolePurge(msg *discordgo.Message, role *discordgo.Role) ([]failedRoleRemoval, []failedRoleRuleReset, error) {
+	//Get list of members with that role
+	var relevantMembers []*discordgo.Member
+	for member := range b.DiscordConnection.GuildMembersIter(msg.GuildID) {
+		if member.Error != nil {
+			return nil, nil, member.Error
+		} else if member.Member != nil {
+			userRoles := member.Member.Roles
+			for _, roleID := range userRoles {
+				//If user has the role
+				if roleID == role.ID {
+					relevantMembers = append(relevantMembers, member.Member)
+					break
+				}
+			}
+		}
+	}
+	//Remove role from each member
+	var errs []failedRoleRemoval
+	for _, member := range relevantMembers {
+		err := b.DiscordSession().GuildMemberRoleRemove(msg.GuildID, member.User.ID, role.ID)
+		if err != nil {
+			errs = append(errs, failedRoleRemoval{
+				member: member,
+				err:    err,
+			})
+			logrus.Infof("Failed to remove role %v from user %v becuase %v", role, member, err)
+		}
+	}
+	//Get list of associated role assignments
+	rules, err := b.DBConnection.GetRoleRules(msg.GuildID, role.ID)
+	if err != nil {
+		logrus.Warnf("Failed to lookup rules to be undone for role %v due to error %v.", role, err)
+		return errs, nil, err
+	}
+	//Undo each of those role assignments
+	var failedRuleResets []failedRoleRuleReset
+	for _, rule := range rules {
+		logrus.Debugf("Undoing rule %v", rule)
+		err := b.undoRoleRule(&rule.RoleAssignment)
+		if err != nil {
+			failedRuleResets = append(failedRuleResets, failedRoleRuleReset{
+				rule: &rule,
+				err:  err,
+			})
+		}
+	}
+	return errs, failedRuleResets, nil
 }
 
 /**************************
