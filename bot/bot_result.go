@@ -163,7 +163,7 @@ type PartialRoleReset struct {
 
 func (r PartialRoleReset) DiscordMessage() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, ">>>Role %v was reset, but a couple things went wrong.\n", r.roleName)
+	fmt.Fprintf(&b, ">>> Role %v was reset, but a couple things went wrong.\n", r.roleName)
 	if r.failedMembers != nil {
 		fmt.Fprintf(&b, "%d members (", len(r.failedMembers))
 		for i, failedMember := range r.failedMembers {

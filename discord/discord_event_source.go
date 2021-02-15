@@ -52,7 +52,7 @@ func StartDiscordListener(handler EventHandler) (*EventSource, error) {
 	dc.AddHandler(dispatch.dispatchMessageReactionRemoveEvent)
 
 	//Register intents
-	dc.Identify.Intents = discordgo.IntentsGuildMessages | discordgo.IntentsGuildMessageReactions | 
+	dc.Identify.Intents = discordgo.IntentsGuildMessages | discordgo.IntentsGuildMessageReactions
 
 	//Open a websocket connection
 	err = dc.Open()
