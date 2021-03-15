@@ -2,187 +2,231 @@ package bot
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
+	"github.com/bwmarrin/discordgo"
 	"github.com/sirupsen/logrus"
 )
 
-type BotResult interface {
-	DiscordMessage() string
+const (
+	successMessageColour int = 0x28bd00
+	warnMessageColour    int = 0xbdb900
+	errorMessageColour   int = 0xbd1b00
+)
+
+//NiaResponse represents the result of a command which can be both communicated over discord and written to the log.
+type NiaResponse interface {
+	DiscordResponse() *discordgo.MessageSend
 	WriteToLog()
 }
 
-//AdminRoleAlreadyExists indicates that no change was made as the role is already an admin
-type AdminRoleAlreadyExists struct {
-	roleID    string
-	timeStamp time.Time
+//NiaResponseSuccess will be returned when a command has been successfully completed
+type NiaResponseSuccess struct {
+	//The base command name
+	command string
+	//The entire text contents of the message
+	commandMsg string
+	//The time the success was logged at
+	timestamp time.Time
 }
 
-func (r AdminRoleAlreadyExists) DiscordMessage() string {
-	return fmt.Sprintf("Could not add role %v as admin because it already has admin priveliges. %v", r.roleID, writeLogRef(r.timeStamp))
-}
-
-func (r AdminRoleAlreadyExists) WriteToLog() {
-	logrus.Infof("%v Could not add role %v as admin because it already has admin priveliges.", logLineLabel(r.timeStamp), r.roleID)
-}
-
-//AdminRoleAdded represents a successful addition of an admin role
-type AdminRoleAdded struct {
-	timeStamp time.Time
-}
-
-func (r AdminRoleAdded) DiscordMessage() string {
-	return fmt.Sprintf("All done!")
-}
-
-func (r AdminRoleAdded) WriteToLog() {
-	logrus.Infof("%v Added role as admin.", logLineLabel(r.timeStamp))
-}
-
-//ManagedRoleAdded represents a successful addition of an managed role
-type ManagedRoleAdded struct {
-	timeStamp time.Time
-}
-
-func (r ManagedRoleAdded) DiscordMessage() string {
-	return fmt.Sprintf("All done!")
-}
-
-func (r ManagedRoleAdded) WriteToLog() {
-	logrus.Infof("%v Added managed role.", logLineLabel(r.timeStamp))
-}
-
-//RoleNotFound indicates that the named role was not found
-type RoleNotFound struct {
-	roleName  string
-	timeStamp time.Time
-}
-
-func (r RoleNotFound) DiscordMessage() string {
-	return fmt.Sprintf("Oops, I couldn't find a role called `%v`. It might be worth using an @mention in the command. %v", r.roleName, writeLogRef(r.timeStamp))
-}
-
-func (r RoleNotFound) WriteToLog() {
-	logrus.Infof("%v Couldn't find role %v.", logLineLabel(r.timeStamp), r.roleName)
-}
-
-//InvalidMessageRef indicates that the provided message could not be found
-type InvalidMessageRef struct {
-	ref       string
-	timeStamp time.Time
-}
-
-func (r InvalidMessageRef) DiscordMessage() string {
-	return fmt.Sprintf("I couldn't find a message at `%v`. It might be worth using a message link in the command. %v", r.ref, writeLogRef(r.timeStamp))
-}
-
-func (r InvalidMessageRef) WriteToLog() {
-	logrus.Infof("%v Couldn't find message %v.", logLineLabel(r.timeStamp), r.ref)
-}
-
-//InvalidEmote indicates that the provided emote could not be found
-type InvalidEmote struct {
-	emote     string
-	timeStamp time.Time
-}
-
-func (r InvalidEmote) DiscordMessage() string {
-	return fmt.Sprintf("I couldn't find the emote `%v`. %v", r.emote, writeLogRef(r.timeStamp))
-}
-
-func (r InvalidEmote) WriteToLog() {
-	logrus.Infof("%v Couldn't find emote %v.", logLineLabel(r.timeStamp), r.emote)
-}
-
-//SyntaxError indicates that we didn't get the arguments we expected
-type SyntaxError struct {
-	args      string
-	syntax    string
-	timeStamp time.Time
-}
-
-func (r SyntaxError) DiscordMessage() string {
-	return fmt.Sprintf("Sorry, `%v` doesn't make sense as arguments for that command. The correct syntax is %v. %v", r.args, r.syntax, writeLogRef(r.timeStamp))
-}
-
-func (r SyntaxError) WriteToLog() {
-	logrus.Infof("%v Syntax error: %v should have been %v.", logLineLabel(r.timeStamp), r.args, r.syntax)
-}
-
-//InternalError indicates some kind of error whilst accessing the database
-type InternalError struct {
-	err       error
-	timeStamp time.Time
-}
-
-func (r InternalError) DiscordMessage() string {
-	return fmt.Sprintf("Uh-oh, something went wrong. Please message whoever is responsible for running the bot. %v", writeLogRef(r.timeStamp))
-}
-
-func (r InternalError) WriteToLog() {
-	logrus.Warnf("%v Encountered critical interal error %v.", logLineLabel(r.timeStamp), r.err)
-}
-
-//CommandNeedsAdmin indicates an admin-restricted command was attempted by a non-admin
-type CommandNeedsAdmin struct {
-	command   string
-	timeStamp time.Time
-}
-
-func (r CommandNeedsAdmin) DiscordMessage() string {
-	return fmt.Sprintf("Sorry, only admins can run `%v`. If you think this is a mistake, please contact a developer. %v", r.command, writeLogRef(r.timeStamp))
-}
-
-func (r CommandNeedsAdmin) WriteToLog() {
-	logrus.Infof("%v Rejected admin command %v.", logLineLabel(r.timeStamp), r.command)
-}
-
-//RoleReset indicates a managed role has been successfully reset
-type RoleReset struct {
-	roleID    string
-	roleName  string
-	timeStamp time.Time
-}
-
-func (r RoleReset) DiscordMessage() string {
-	return fmt.Sprintf("All done!")
-}
-
-func (r RoleReset) WriteToLog() {
-	logrus.Infof("%v Reset role %v.", logLineLabel(r.timeStamp), r.roleID)
-}
-
-type PartialRoleReset struct {
-	failedMembers []failedRoleRemoval
-	failedRules   []failedRoleRuleReset
-	roleID        string
-	roleName      string
-	timeStamp     time.Time
-}
-
-func (r PartialRoleReset) DiscordMessage() string {
-	var b strings.Builder
-	fmt.Fprintf(&b, ">>> Role %v was reset, but a couple things went wrong.\n", r.roleName)
-	if r.failedMembers != nil {
-		fmt.Fprintf(&b, "%d members (", len(r.failedMembers))
-		for i, failedMember := range r.failedMembers {
-			fmt.Fprintf(&b, "%v", failedMember.member.Nick)
-			if i < len(r.failedMembers) {
-				fmt.Fprint(&b, ", ")
-			}
-		}
-		fmt.Fprint(&b, ") could not have their roles removed.\n")
+//DiscordResponse builds a MessageSend object which can be sent back to whoever sent a command message.
+func (r NiaResponseSuccess) DiscordResponse() *discordgo.MessageSend {
+	description := fmt.Sprintf("Completed %v command successfully!", r.command)
+	embed := discordgo.MessageEmbed{
+		Title:       "Success! \\o/",
+		Type:        discordgo.EmbedTypeRich,
+		Description: description,
+		Timestamp:   r.timestamp.Format(time.RFC3339),
+		Color:       successMessageColour,
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: fmt.Sprintf("Log ID: %d", r.timestamp.UnixNano()),
+		},
 	}
-	if r.failedRules != nil {
-		fmt.Fprint(&b, "Also encountered an issue resetting some role assignment methods.\n")
+	msg := discordgo.MessageSend{
+		Embed: &embed,
+		TTS:   false,
+		Files: []*discordgo.File{},
 	}
-	fmt.Fprint(&b, writeLogRef(r.timeStamp))
-	return b.String()
+	return &msg
 }
 
-func (r PartialRoleReset) WriteToLog() {
-	logrus.Infof("%v Reset role %v with issues. Failed members: %v, Failed rules: %v", logLineLabel(r.timeStamp), r.roleID, r.failedMembers, r.failedRules)
+//WriteToLog dumps data on a discord command response to the log
+func (r NiaResponseSuccess) WriteToLog() {
+	logrus.Infof("%v Completed command %v successfully.", logLineLabel(r.timestamp), r.commandMsg)
+}
+
+//NiaResponsePartialSuccess will be returned when a command has executed but with issues
+type NiaResponsePartialSuccess struct {
+	//The base command name
+	command string
+	//The entire text contents of the message
+	commandMsg string
+	//A human-readable description of the issue
+	description string
+	//A map containing fields which should be included in the embed
+	data map[string]string
+	//The time the success was logged at
+	timestamp time.Time
+}
+
+//DiscordResponse builds a MessageSend object which can be sent back to whoever sent a command message.
+func (r NiaResponsePartialSuccess) DiscordResponse() *discordgo.MessageSend {
+	description := fmt.Sprintf("Completed %v command but with errors: \n%v", r.command, r.description)
+	embed := discordgo.MessageEmbed{
+		Title:       "Partial success...",
+		Type:        discordgo.EmbedTypeRich,
+		Description: description,
+		Timestamp:   r.timestamp.Format(time.RFC3339),
+		Color:       warnMessageColour,
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: fmt.Sprintf("Log ID: %d", r.timestamp.UnixNano()),
+		},
+		Fields: stringMapToFields(r.data),
+	}
+	msg := discordgo.MessageSend{
+		Embed: &embed,
+		TTS:   false,
+		Files: []*discordgo.File{},
+	}
+	return &msg
+}
+
+//WriteToLog dumps data on a discord command response to the log
+func (r NiaResponsePartialSuccess) WriteToLog() {
+	logrus.Infof("%v Completed command %v but with errors: %v.", logLineLabel(r.timestamp), r.commandMsg, r.data)
+}
+
+//NiaResponseSyntaxError will be returned when there was an issue with the user's input
+type NiaResponseSyntaxError struct {
+	//The base command name
+	command string
+	//The entire text contents of the message
+	commandMsg string
+	//A human-readable description of the issue
+	description string
+	//A description of the correct syntax
+	syntax string
+	//The time the error was logged at
+	timestamp time.Time
+}
+
+//DiscordResponse builds a MessageSend object which can be sent back to whoever sent a command message.
+func (r NiaResponseSyntaxError) DiscordResponse() *discordgo.MessageSend {
+	description := fmt.Sprintf("Sorry, but there was a problem with the data you supplied for the %v command: \n%v", r.command, r.description)
+	fields := map[string]string{
+		"Your command":   r.commandMsg,
+		"Correct syntax": r.syntax,
+	}
+	embed := discordgo.MessageEmbed{
+		Title:       "Uh-oh, there was something wrong with that command",
+		Type:        discordgo.EmbedTypeRich,
+		Description: description,
+		Timestamp:   r.timestamp.Format(time.RFC3339),
+		Color:       errorMessageColour,
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: fmt.Sprintf("Log ID: %d", r.timestamp.UnixNano()),
+		},
+		Fields: stringMapToFields(fields),
+	}
+	msg := discordgo.MessageSend{
+		Embed: &embed,
+		TTS:   false,
+		Files: []*discordgo.File{},
+	}
+	return &msg
+}
+
+//WriteToLog dumps data on a discord command response to the log
+func (r NiaResponseSyntaxError) WriteToLog() {
+	logrus.Infof("%v Syntax error in command %v: %v", logLineLabel(r.timestamp), r.commandMsg, r.description)
+}
+
+//NiaResponseInternalError will be returned when there was some kind of error within the bot or when communicating with
+//APIs
+type NiaResponseInternalError struct {
+	//The base command name
+	command string
+	//The entire text contents of the message
+	commandMsg string
+	//A human-readable description of the issue
+	description string
+	//A map containing fields which should be included in the embed
+	data map[string]string
+	//The time the error was logged at
+	timestamp time.Time
+}
+
+//DiscordResponse builds a MessageSend object which can be sent back to whoever sent a command message.
+func (r NiaResponseInternalError) DiscordResponse() *discordgo.MessageSend {
+	description := fmt.Sprintf("Oops! I encountered an unexpected error whilst running your %v command. Please try again later or file a bug report.", r.command)
+	dataWithDescription := r.data
+	dataWithDescription["Error"] = r.description
+	embed := discordgo.MessageEmbed{
+		Title:       "Oops, something went wrong ;w;",
+		Type:        discordgo.EmbedTypeRich,
+		Description: description,
+		Timestamp:   r.timestamp.Format(time.RFC3339),
+		Color:       errorMessageColour,
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: fmt.Sprintf("Log ID: %d", r.timestamp.UnixNano()),
+		},
+		Fields: stringMapToFields(dataWithDescription),
+	}
+	msg := discordgo.MessageSend{
+		Embed: &embed,
+		TTS:   false,
+		Files: []*discordgo.File{},
+	}
+	return &msg
+}
+
+//WriteToLog dumps data on a discord command response to the log
+func (r NiaResponseInternalError) WriteToLog() {
+	logrus.Infof("%v Internal error in whilst executing command %v: %v | data: %v", logLineLabel(r.timestamp), r.commandMsg, r.description, r.data)
+}
+
+//NiaResponseNotAllowed will be returned when a user tried to run a command that they do not have the correct role for
+type NiaResponseNotAllowed struct {
+	//The base command name
+	command string
+	//The entire text contents of the message
+	commandMsg string
+	//A human-readable description of the issue
+	description string
+	//The time the error was logged at
+	timestamp time.Time
+}
+
+//DiscordResponse builds a MessageSend object which can be sent back to whoever sent a command message.
+func (r NiaResponseNotAllowed) DiscordResponse() *discordgo.MessageSend {
+	description := fmt.Sprintf("I'm sorry Dave, I can't let you do that...")
+	fields := map[string]string{
+		"Reason":  r.description,
+		"Command": r.commandMsg,
+	}
+	embed := discordgo.MessageEmbed{
+		Title:       "That's illegal m8",
+		Type:        discordgo.EmbedTypeRich,
+		Description: description,
+		Timestamp:   r.timestamp.Format(time.RFC3339),
+		Color:       errorMessageColour,
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: fmt.Sprintf("Log ID: %d", r.timestamp.UnixNano()),
+		},
+		Fields: stringMapToFields(fields),
+	}
+	msg := discordgo.MessageSend{
+		Embed: &embed,
+		TTS:   false,
+		Files: []*discordgo.File{},
+	}
+	return &msg
+}
+
+//WriteToLog dumps data on a discord command response to the log
+func (r NiaResponseNotAllowed) WriteToLog() {
+	logrus.Infof("%v Rejected command `%v` as the sender did not have the correct priveliges | description: %v", logLineLabel(r.timestamp), r.commandMsg, r.description)
 }
 
 /////////////////////
@@ -193,5 +237,18 @@ func writeLogRef(t time.Time) string {
 }
 
 func logLineLabel(t time.Time) string {
-	return fmt.Sprintf("#%v#", t.UnixNano())
+	return fmt.Sprintf("#%v# | ", t.UnixNano())
+}
+
+func stringMapToFields(fields map[string]string) []*discordgo.MessageEmbedField {
+	var res []*discordgo.MessageEmbedField
+	for fieldName, content := range fields {
+		field := discordgo.MessageEmbedField{
+			Name:   fieldName,
+			Value:  content,
+			Inline: false,
+		}
+		res = append(res, &field)
+	}
+	return res
 }

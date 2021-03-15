@@ -113,7 +113,7 @@ func (d *EventSource) dispatchMessageCreateEvent(s *discordgo.Session, m *discor
 	d.handler.HandleMessage(m)
 
 	//For debugging
-	fmt.Printf("Got message `%v`\n", m.Content)
+	logrus.Debugf("Got message `%v`\n", m.Content)
 }
 
 func (d *EventSource) dispatchMessageReactionAddEvent(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
