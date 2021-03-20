@@ -21,6 +21,8 @@ func (b *NiaBot) HandleMessage(msg *discordgo.MessageCreate) {
 			b.HandleInitReactionsMessage(msg)
 		case "purgerole":
 			b.HandlePurgeRoleMessage(msg)
+		case "registertwitch":
+			b.HandleRegisterTwitchCommandMessage(msg)
 		}
 
 	}

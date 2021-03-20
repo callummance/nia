@@ -229,6 +229,48 @@ func (r NiaResponseNotAllowed) WriteToLog() {
 	logrus.Infof("%v Rejected command `%v` as the sender did not have the correct priveliges | description: %v", logLineLabel(r.timestamp), r.commandMsg, r.description)
 }
 
+//NiaResponseFeatureNotEnabled will be returned when a user tried to run a command which requires an unloaded module
+type NiaResponseFeatureNotEnabled struct {
+	//The base command name
+	command string
+	//The entire text contents of the message
+	commandMsg string
+	//The name of the feature which was disabled
+	disabledFeature string
+	//The time the error was logged at
+	timestamp time.Time
+}
+
+//DiscordResponse builds a MessageSend object which can be sent back to whoever sent a command message.
+func (r NiaResponseFeatureNotEnabled) DiscordResponse() *discordgo.MessageSend {
+	description := fmt.Sprintf("Sorry, buy the '%v' command requires a feature which is not currently running.", r.command)
+	fields := map[string]string{
+		"Required Feature(s)": r.disabledFeature,
+	}
+	embed := discordgo.MessageEmbed{
+		Title:       "Required feature is not activated",
+		Type:        discordgo.EmbedTypeRich,
+		Description: description,
+		Timestamp:   r.timestamp.Format(time.RFC3339),
+		Color:       errorMessageColour,
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: fmt.Sprintf("Log ID: %d", r.timestamp.UnixNano()),
+		},
+		Fields: stringMapToFields(fields),
+	}
+	msg := discordgo.MessageSend{
+		Embed: &embed,
+		TTS:   false,
+		Files: []*discordgo.File{},
+	}
+	return &msg
+}
+
+//WriteToLog dumps data on a discord command response to the log
+func (r NiaResponseFeatureNotEnabled) WriteToLog() {
+	logrus.Infof("%v Rejected command `%v` as required feature %v is not loaded", logLineLabel(r.timestamp), r.commandMsg, r.disabledFeature)
+}
+
 /////////////////////
 //Utility Functions//
 /////////////////////

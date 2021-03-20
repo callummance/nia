@@ -77,6 +77,13 @@ func (db *DBConnection) CreateTables() {
 	if err != nil {
 		logrus.Warnf("Failed to create role rules table due to error %v", err)
 	}
+	//member data table
+	_, err = rethink.TableCreate(membersTable, rethink.TableCreateOpts{
+		PrimaryKey: "id",
+	}).RunWrite(db.session)
+	if err != nil {
+		logrus.Warnf("Failed to create role rules table due to error %v", err)
+	}
 }
 
 //CreateDatabase ensures the nia database exists

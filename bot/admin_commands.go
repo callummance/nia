@@ -123,6 +123,7 @@ const handleAddManagedRoleSyntax string = "```" +
 Options depend on the role assignment method selected as follows:
 
 	!addmanagedrole "<role>" reaction <post> <emoji> [flags] 
+		Allows assignment of roles based on users reacting with any chosen reaction to the provided post.
 
 		<role> may be the role name enclosed in double quotation marks or an @mention.
 		<post> may be a message link (recommended) or ID of the post (Right click -> copy ID if in developer mode) and channel in the format <channel_id>:<post_id>.
@@ -130,10 +131,13 @@ Options depend on the role assignment method selected as follows:
 		[flags] can be any number of optional flags from the following: 
 			"clearafter": Remove reaction after assigningthe role
 			"initialreact": Bot should create an initial reaction
-			"noremove": Bot should not remove role if reaction is removed` +
+			"noremove": Bot should not remove role if reaction is removed
+			
+	!addmanagedrole "<role>" nowstreaming
+		Assigns a role to users for as long as their linked twitch account is live ` +
 	"```"
 
-var regexHandleAddManagedRoleMessage = regexp.MustCompile(`^\s*((?:"?<\@\&\d*\>"?)|(?:\"[^"]*\")|(?:\w*))\s*(reaction)\s*(.*)$`)
+var regexHandleAddManagedRoleMessage = regexp.MustCompile(`^\s*((?:"?<\@\&\d*\>"?)|(?:\"[^"]*\")|(?:\w*))\s*(reaction|nowstreaming)\s*(.*)$`)
 
 //HandleAddManagedRoleMessage handles a message starting with the !addmanagedrole command
 //syntax: !addmanagedrole "<role>" <type> [typeopts]
@@ -188,6 +192,13 @@ func (b *NiaBot) HandleAddManagedRoleMessage(msg *discordgo.MessageCreate) {
 					syntax:      handleAddAdminRoleSyntax,
 					timestamp:   time.Now(),
 				}
+			}
+			opts := matches[3]
+			switch matches[2] {
+			case "reaction":
+				result = b.handleAddReactionManagedRoleMessage(role.ID, opts, msg)
+			case "nowstreaming":
+				result = b.handleAddNowStreamingManagedRoleMessage(role.ID, msg.Message)
 			}
 		}
 	}
@@ -289,6 +300,33 @@ func (b *NiaBot) handleAddReactionManagedRoleMessage(roleID string, opts string,
 		RoleAssignment: roleAssignmentStruct,
 	}
 
+	err := b.DBConnection.AddManagedRoleRule(rule)
+	if err != nil {
+		errorTxt := fmt.Sprintf("Encountered error %v when trying to add role %v to managed roles on server %v", err, roleID, msg.GuildID)
+		return NiaResponseInternalError{
+			command:     commandName,
+			commandMsg:  msg.Content,
+			description: errorTxt,
+			timestamp:   time.Now(),
+		}
+	}
+	return NiaResponseSuccess{
+		command:    commandName,
+		commandMsg: msg.Content,
+		timestamp:  time.Now(),
+	}
+}
+
+func (b *NiaBot) handleAddNowStreamingManagedRoleMessage(roleID string, msg *discordgo.Message) NiaResponse {
+	commandName := "!addmanagedrole"
+	roleAssStruct := guildmodels.RoleAssignment{
+		AssignmentType: "nowlive",
+	}
+	rule := guildmodels.ManagedRoleRule{
+		RoleID:         roleID,
+		GuildID:        msg.GuildID,
+		RoleAssignment: roleAssStruct,
+	}
 	err := b.DBConnection.AddManagedRoleRule(rule)
 	if err != nil {
 		errorTxt := fmt.Sprintf("Encountered error %v when trying to add role %v to managed roles on server %v", err, roleID, msg.GuildID)

@@ -21,6 +21,35 @@ func (db *DBConnection) AddManagedRoleRule(rule guildmodels.ManagedRoleRule) err
 	return nil
 }
 
+//LookupNowLiveRoles returns a list of all roles in the given server which should be assigned when a member is online on a streaming
+//platform.
+func (db *DBConnection) LookupNowLiveRoles(guildID string) ([]guildmodels.ManagedRoleRule, error) {
+	filter := map[string]interface{}{
+		"guild_id": guildID,
+		"role_assignment": map[string]interface{}{
+			"type": "nowlive",
+		},
+	}
+	logrus.Debugf("Looking up nowlive roles with filter %#v", filter)
+	query := rethink.Table(guildRolesTable).Filter(filter)
+	res, err := query.Run(db.session)
+	defer res.Close()
+	if err != nil {
+		logrus.Warnf("Encountered error looking up streaming assigned role for guild %v in database: %v.", guildID, err)
+		return nil, err
+	}
+	var matchingRoleRules []guildmodels.ManagedRoleRule
+	if res.IsNil() {
+		return nil, nil
+	}
+	err = res.All(&matchingRoleRules)
+	if err != nil {
+		logrus.Warnf("Encountered error looking up streaming assigned role for guild %v in database: %v.", guildID, err)
+		return nil, err
+	}
+	return matchingRoleRules, nil
+}
+
 //LookupRolesByEmote takes a message ID as well as its channel and guild, along with an emoji ID.
 //It then returns any managed role rules that include that reaction.
 func (db *DBConnection) LookupRolesByEmote(msgID string, chanID string, guildID string, emojiID string) ([]guildmodels.ManagedRoleRule, error) {
