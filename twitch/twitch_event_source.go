@@ -6,19 +6,21 @@ import (
 
 	"github.com/callummance/nazuna"
 	"github.com/callummance/nazuna/messages"
+	"github.com/callummance/nazuna/restclient"
 	"github.com/sirupsen/logrus"
 )
 
 const (
 	twitchClientIDEnvVar     = "NIA_TWITCH_CLIENT_ID"
 	twitchClientSecretEnvVar = "NIA_TWITCH_CLIENT_SECRET"
-	serverHostnameEnvVar     = "NIA_SERVER_HOSTNAME"
+	serverHostnameEnvVar     = "NIA_TWITCH_SERVER_HOSTNAME"
+	serverPortEnvVar         = "NIA_TWITCH_SERVER_WH_LISTEN_PORT"
 )
 
 //EventHandler is a struct which can handle all the events the discord listener generates.
 type EventHandler interface {
-	HandleStreamOnline(*messages.StreamOnlineEvent)
-	HandleStreamOffline(*messages.StreamOfflineEvent)
+	HandleTwitchStreamOnline(*messages.StreamOnlineEvent)
+	HandleTwitchStreamOffline(*messages.StreamOfflineEvent)
 }
 
 type EventSource struct {
@@ -39,6 +41,8 @@ func StartTwitchListener(handler EventHandler, initChannelListeners []string) (*
 	}
 
 	//Clear any old subscriptions
+	//TODO: instead of this, keep subscriptions going when bot is closed. This means that we will need to be able to autoremove events
+	//from unrecognized twitch UIDs as well as checking and resubscribing to events on initial load
 	client.ClearSubscriptions()
 
 	//Register handlers
@@ -47,6 +51,7 @@ func StartTwitchListener(handler EventHandler, initChannelListeners []string) (*
 
 	//Subscribe to any events provided
 	for _, channelToListenFor := range initChannelListeners {
+		logrus.Debugf("Creating suscriptions for stream offline and online events for twitch user %v", channelToListenFor)
 		//Register stream.online subscription
 		client.CreateSubscription(messages.ConditionStreamOnline{
 			BroadcasterUID: channelToListenFor,
@@ -69,23 +74,43 @@ func (t *EventSource) SubscribeToURL(nameOrURL string) (string, error) {
 		return "", err
 	}
 	broadcasterID := userData.ID
-	s, err := t.twitchClient.CreateSubscription(messages.ConditionStreamOnline{
-		BroadcasterUID: broadcasterID,
-	})
+	err = t.SubscribeToUID(broadcasterID)
 	if err != nil {
 		return "", err
 	}
+	return broadcasterID, nil
+}
+
+//SubscribeToUID attempts to create StreamOnline and StreamOffline subscriptions for the provided broadcaster
+//UID
+func (t *EventSource) SubscribeToUID(uid string) error {
+	s, err := t.twitchClient.CreateSubscription(messages.ConditionStreamOnline{
+		BroadcasterUID: uid,
+	})
+	if err != nil {
+		return err
+	}
 	_, err = t.twitchClient.CreateSubscription(messages.ConditionStreamOffline{
-		BroadcasterUID: broadcasterID,
+		BroadcasterUID: uid,
 	})
 	if err != nil {
 		if len(s.Data) > 0 {
 			t.twitchClient.DeleteSubscription(s.Data[0].ID)
 		}
-		return "", err
+		return err
 	}
+	return nil
+}
 
-	return broadcasterID, nil
+//GetBroadcasterDeets looks up a broadcaster by name and attempts to fetch their details
+func (t *EventSource) GetBroadcasterDeets(name string) (*restclient.TwitchUser, error) {
+	return t.twitchClient.GetBroadcaster(name)
+}
+
+//ClearSubscriptions attempts to unsubscribe from all current subscriptions
+func (t *EventSource) ClearSubscriptions() error {
+	err := t.twitchClient.ClearSubscriptions()
+	return err
 }
 
 func getOptsFromEnv() (*nazuna.NazunaOpts, error) {
@@ -104,9 +129,14 @@ func getOptsFromEnv() (*nazuna.NazunaOpts, error) {
 		logrus.Warnf("`%v` env variable was not set.", serverHostnameEnvVar)
 		return nil, fmt.Errorf("`%v` env variable was not set", serverHostnameEnvVar)
 	}
+	serverPort, exists := os.LookupEnv(serverPortEnvVar)
+	if !exists {
+		logrus.Warnf("`%v` env variable was not set.", serverHostnameEnvVar)
+		serverPort = ":8080"
+	}
 	opts := nazuna.NazunaOpts{
 		WebhookPath:    "/twitchhook",
-		ListenOn:       ":8080",
+		ListenOn:       serverPort,
 		ClientID:       clientID,
 		ClientSecret:   clientSecret,
 		Scopes:         nil,
@@ -124,11 +154,11 @@ func (t *EventSource) dispatchStreamOnlineEvent(s *messages.Subscription, ev *me
 		}
 	}()
 
-	//Dispatch to bot handlers
-	t.handler.HandleStreamOnline(ev)
-
 	//For debugging
 	logrus.Debugf("Got stream online alert for stream`%v`\n", ev.BroadcasterUserName)
+
+	//Dispatch to bot handlers
+	t.handler.HandleTwitchStreamOnline(ev)
 }
 
 func (t *EventSource) dispatchStreamOfflineEvent(s *messages.Subscription, ev *messages.StreamOfflineEvent) {
@@ -139,9 +169,9 @@ func (t *EventSource) dispatchStreamOfflineEvent(s *messages.Subscription, ev *m
 		}
 	}()
 
-	//Dispatch to bot handlers
-	t.handler.HandleStreamOffline(ev)
-
 	//For debugging
 	logrus.Debugf("Got stream offline alert for stream`%v`\n", ev.BroadcasterUserName)
+
+	//Dispatch to bot handlers
+	t.handler.HandleTwitchStreamOffline(ev)
 }

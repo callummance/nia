@@ -6,6 +6,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/callummance/nia/db"
 	"github.com/callummance/nia/discord"
+	"github.com/callummance/nia/twitch"
 	"github.com/prometheus/common/log"
 	"github.com/sirupsen/logrus"
 )
@@ -14,6 +15,7 @@ import (
 type NiaBot struct {
 	DiscordConnection *discord.EventSource
 	DBConnection      *db.DBConnection
+	TwitchConnection  *twitch.EventSource
 }
 
 //Init creates a new NiaBot instance
@@ -31,6 +33,19 @@ func Init() (*NiaBot, error) {
 	if err != nil {
 		logrus.Errorf("Cannot start bot due to error initializing discord connection: %v", err)
 		return nil, err
+	}
+
+	//Try to start twitch connection
+	uids, err := db.GetAllTwitchUIDs()
+	if err != nil {
+		logrus.Errorf("Failed to initialize twitch listener due to error %v. Continuing without twitch functionality.", err)
+	} else {
+		twitch, err := twitch.StartTwitchListener(&res, uids)
+		if err != nil {
+			logrus.Errorf("Failed to initialize twitch listener due to error %v. Continuing without twitch functionality.", err)
+		} else {
+			res.TwitchConnection = twitch
+		}
 	}
 
 	res.DiscordConnection = disc

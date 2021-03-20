@@ -10,7 +10,7 @@ type ManagedRoleRule struct {
 //RoleAssignment represents how a role should be assigned
 type RoleAssignment struct {
 	AssignmentType   string              `gorethink:"type"`
-	ReactionRoleData *ReactionRoleAssign `gorethink:"reaction_opts"`
+	ReactionRoleData *ReactionRoleAssign `gorethink:"reaction_opts,omitempty"`
 }
 
 //ReactionRoleAssign represents a role assignment prompted by reacting to a post
