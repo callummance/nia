@@ -14,12 +14,13 @@ const dbNameEnvVar string = "NIA_DB_NAME"
 const baseDbPoolConnections int = 2
 const maxDbPoolConnections int = 20
 
-type DBConnection struct {
+//Connection contains a handle to the database
+type Connection struct {
 	session *rethink.Session
 }
 
 //Init creates a new connection pool for the database at the address provided by the relevant environment variable
-func Init() (*DBConnection, error) {
+func Init() (*Connection, error) {
 	//Get DB name from env
 	dbName, exists := os.LookupEnv(dbNameEnvVar)
 	if !exists {
@@ -44,7 +45,7 @@ func Init() (*DBConnection, error) {
 		return nil, fmt.Errorf("failed to create connection to rethinkdb instance at address %v because %v", rethinkDBAddr, err)
 	}
 
-	res := DBConnection{
+	res := Connection{
 		session: session,
 	}
 
@@ -56,13 +57,13 @@ func Init() (*DBConnection, error) {
 }
 
 //Close cleanly terminates the database connection
-func (db *DBConnection) Close() {
+func (db *Connection) Close() {
 	logrus.Info("Terminating DB connection...")
 	_ = db.session.Close()
 }
 
 //CreateTables ensures all tables needed exist.
-func (db *DBConnection) CreateTables() {
+func (db *Connection) CreateTables() {
 	//guilds table
 	_, err := rethink.TableCreate(guildsTable, rethink.TableCreateOpts{
 		PrimaryKey: "id",
@@ -82,12 +83,19 @@ func (db *DBConnection) CreateTables() {
 		PrimaryKey: "id",
 	}).RunWrite(db.session)
 	if err != nil {
-		logrus.Warnf("Failed to create role rules table due to error %v", err)
+		logrus.Warnf("Failed to create members table due to error %v", err)
+	}
+	//twitch data table
+	_, err = rethink.TableCreate(twitchTable, rethink.TableCreateOpts{
+		PrimaryKey: "tid",
+	}).RunWrite(db.session)
+	if err != nil {
+		logrus.Warnf("Failed to create twitch streams table due to error %v", err)
 	}
 }
 
 //CreateDatabase ensures the nia database exists
-func (db *DBConnection) CreateDatabase(dbName string) {
+func (db *Connection) CreateDatabase(dbName string) {
 	_, err := rethink.DBCreate(dbName).RunWrite(db.session)
 	if err != nil {
 		logrus.Warnf("Failed to create %v DB due to error %v", dbName, err)

@@ -14,7 +14,7 @@ import (
 //NiaBot represents an instance of the discord bot, containing handles to the various external connections.
 type NiaBot struct {
 	DiscordConnection *discord.EventSource
-	DBConnection      *db.DBConnection
+	DBConnection      *db.Connection
 	TwitchConnection  *twitch.EventSource
 }
 
@@ -36,11 +36,11 @@ func Init() (*NiaBot, error) {
 	}
 
 	//Try to start twitch connection
-	uids, err := db.GetAllTwitchUIDs()
+	twitchUIDs, err := db.GetAllTwitchUIDs()
 	if err != nil {
 		logrus.Errorf("Failed to initialize twitch listener due to error %v. Continuing without twitch functionality.", err)
 	} else {
-		twitch, err := twitch.StartTwitchListener(&res, uids)
+		twitch, err := twitch.StartTwitchListener(&res, twitchUIDs)
 		if err != nil {
 			logrus.Errorf("Failed to initialize twitch listener due to error %v. Continuing without twitch functionality.", err)
 		} else {
