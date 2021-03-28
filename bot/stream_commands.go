@@ -67,10 +67,7 @@ func (b *NiaBot) registerTwitch(msg *discordgo.Message) NiaResponse {
 		}
 	}
 	//We have a valid broadcaster, so save it to the database and register a subscription
-	connection := guildmodels.TwitchConnectionData{
-		TwitchUID: broadcaster.ID,
-	}
-	_, err = b.DBConnection.SetTwitchConnectionData(msg.GuildID, msg.Author.ID, connection)
+	oldStream, newStream, err := b.DBConnection.SetTwitchConnectionData(msg.GuildID, msg.Author.ID, broadcaster.ID)
 	if err != nil {
 		//DB error of some kind
 		return NiaResponseInternalError{
@@ -81,7 +78,85 @@ func (b *NiaBot) registerTwitch(msg *discordgo.Message) NiaResponse {
 			timestamp:   time.Now(),
 		}
 	}
-	t.SubscribeToUID(broadcaster.ID)
+	//If there is an oldStream, we need to do some more cleaning up
+	if oldStream != nil && oldStream.TwitchUID != newStream.TwitchUID {
+		//Check if there are any others in the guild linked to the same stream
+		linkedMembers, err := b.DBConnection.GetMemberByConnection(guildmodels.MemberConnections{TwitchConnection: oldStream}, &msg.GuildID, nil)
+		if err != nil {
+			logrus.Errorf("Failed to look up remaining members linked to twitch stream ID %v in guild %v due to error %v", oldStream.TwitchUID, msg.GuildID, err)
+		} else {
+			if linkedMembers != nil && len(linkedMembers) >= 0 {
+				//There are other members in the guild with the same stream linked, so no need to remove anything else
+				logrus.Debugf("No need to remove any posts as there still exists at least one linked member in the same guild")
+			} else {
+				postsToRemove := make([]guildmodels.MessageRef, 0)
+				for _, post := range oldStream.DiscordStatusPosts {
+					if post.GuildID == msg.GuildID {
+						postsToRemove = append(postsToRemove, post)
+					}
+				}
+				//Remove alert posts as that user was the only one in the guild with that channel linked
+				b.removeAlertPosts(postsToRemove)
+			}
+		}
+		//Remove now streaming roles from user if their new stream is not also streaming
+		if !newStream.IsLive {
+			b.unassignLiveRoles(msg.Author.ID, msg.GuildID)
+		}
+		//If there are no other members with the same stream linked, we should remove it from the DB and unsubscribe from twitch alerts
+		globalLinkedMembers, err := b.DBConnection.GetMemberByConnection(guildmodels.MemberConnections{TwitchConnection: oldStream}, nil, nil)
+		if err != nil {
+			logrus.Errorf("Failed to look up remaining members linked to twitch stream ID %v in globally due to error %v", oldStream.TwitchUID, err)
+		} else {
+			if globalLinkedMembers == nil || len(globalLinkedMembers) == 0 {
+				//Unsubscribe from eventsub notifications
+				err := t.UnsubscribeFromStream(oldStream.TwitchUID)
+				if err != nil {
+					logrus.Errorf("Failed to unsubscribe from twitch alerts for stream uid %v due to error %v", oldStream.TwitchUID, err)
+				}
+				//Delete twitch stream from DB
+				err = b.DBConnection.DeleteTwitchStream(oldStream.TwitchUID)
+				if err != nil {
+					logrus.Errorf("Failed to remove twitch uid %v from DB due to error %v", oldStream.TwitchUID, err)
+				}
+			}
+		}
+	}
+	err = t.SubscribeToStream(newStream.TwitchUID)
+	if err != nil {
+		return NiaResponseInternalError{
+			command:     commandName,
+			commandMsg:  msg.Content,
+			description: "Encountered error whilst subscribing to twitch updates. Please try again later or contact a developer.",
+			data:        map[string]string{"Error": err.Error()},
+			timestamp:   time.Now(),
+		}
+	}
+	if !newStream.IsLive {
+		//update newly connected stream
+		err := t.ForceStreamUpdate(newStream.TwitchUID)
+		if err != nil {
+			return NiaResponsePartialSuccess{
+				command:     commandName,
+				commandMsg:  msg.Content,
+				description: "Failed to fetch current state of the provided stream. Alerts and roles should still be applied the next time you start streaming.",
+				data:        map[string]string{"Error": err.Error()},
+				timestamp:   time.Now(),
+			}
+		}
+	} else {
+		//assign roles and make post as needed
+		err := b.SetUserStreaming(newStream.TwitchUID, msg.Author.ID, msg.GuildID)
+		if err != nil {
+			return NiaResponsePartialSuccess{
+				command:     commandName,
+				commandMsg:  msg.Content,
+				description: "Failed to set your role and send alert. Alerts and roles should still be applied the next time you start streaming.",
+				data:        map[string]string{"Error": err.Error()},
+				timestamp:   time.Now(),
+			}
+		}
+	}
 	return NiaResponseSuccess{
 		command:    commandName,
 		commandMsg: msg.Content,

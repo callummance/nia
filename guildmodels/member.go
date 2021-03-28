@@ -9,7 +9,7 @@ type MemberData struct {
 
 //MemberConnections contains a bit of data on a member
 type MemberConnections struct {
-	TwitchConnection *TwitchConnectionData `gorethink:"twitch_link,omitempty"`
+	TwitchConnection *TwitchStream `gorethink:"twitch_link,omitempty,reference" gorethink_ref:"tid"`
 }
 
 //NumConnections returns the number of non-nil connections in a MemberConnections struct
@@ -21,7 +21,17 @@ func (cs *MemberConnections) NumConnections() int {
 	return res
 }
 
-//TwitchConnectionData contains details on a link to a single twitch stream
-type TwitchConnectionData struct {
-	TwitchUID string `gorethink:"twitch_uid"`
+//TwitchStream contains details on a link to a single twitch stream as well as data on its current state
+type TwitchStream struct {
+	TwitchUID          string       `gorethink:"tid"`
+	DiscordStatusPosts []MessageRef `gorethink:"posts,omitempty"`
+	IsLive             bool         `gorethink:"is_live"`
+}
+
+//MessageRef contains the details needed to specify a single discord message
+//made to announce a stream going live
+type MessageRef struct {
+	GuildID   string `gorethink:"gid"`
+	ChannelID string `gorethink:"cid"`
+	MessageID string `gorethink:"mid"`
 }

@@ -593,6 +593,94 @@ func (b *NiaBot) doRolePurge(msg *discordgo.Message, role *discordgo.Role) ([]fa
 	return errs, failedRuleResets, nil
 }
 
+const handleSetNotificationChannelSyntax = "```" +
+	`!setnotificationchannel <notification_type> <channel>
+	currently the only supported <notification_type> is 'twitch'
+	<channel> can either be the name of a channel or a link to the channel (eg. #channel)` +
+	"```"
+
+var setnotificationchannelRegex = regexp.MustCompile(`(twitch)\s*("?(?:<#(?:\d+)>)|#?(?:[\w_-]+)"?\s*)`)
+
+//HandleSetNotificationChannel handles a message from an admin setting a certain channel as the target for
+//alert messages
+func (b *NiaBot) HandleSetNotificationChannel(msg *discordgo.MessageCreate) {
+	commandName := "!setnotificationchannel"
+	var result NiaResponse
+	//Check sender is admin
+	isFromAdmin, err := b.isFromAdmin(msg.Member, msg.Author, msg.GuildID)
+	if err != nil {
+		errorTxt := fmt.Sprintf("Failed to check if message came from admin due to error %v", err)
+		result = NiaResponseInternalError{
+			command:     commandName,
+			commandMsg:  msg.Content,
+			description: errorTxt,
+			timestamp:   time.Now(),
+		}
+	} else if !isFromAdmin {
+		errorTxt := "The !setnotificationchannel command can only be run by admins."
+		result = NiaResponseNotAllowed{
+			command:     commandName,
+			commandMsg:  msg.Content,
+			description: errorTxt,
+			timestamp:   time.Now(),
+		}
+	} else {
+		argString := strings.TrimPrefix(msg.Content, "!setnotificationchannel")
+		argString = strings.TrimLeft(argString, " ")
+		matches := regexHandleAddManagedRoleMessage.FindStringSubmatch(argString)
+		if matches == nil {
+			result = NiaResponseSyntaxError{
+				command:     commandName,
+				commandMsg:  msg.Content,
+				description: fmt.Sprintf("*%v* doesn't seem to be the correct syntax for an !setnotificationchannel command", argString),
+				syntax:      handleAddManagedRoleSyntax,
+				timestamp:   time.Now(),
+			}
+		} else {
+			ch, err := b.interpretChannelString(matches[2], msg.GuildID)
+			if err != nil {
+				result = NiaResponseInternalError{
+					command:     commandName,
+					commandMsg:  msg.Content,
+					description: fmt.Sprintf("Something unexpected went wrong whilst trying to read %v as a channel", matches[2]),
+					data:        map[string]string{"Error": err.Error()},
+					timestamp:   time.Now(),
+				}
+			} else {
+				switch matches[2] {
+				case "twitch":
+					channels := guildmodels.NotificationChannels{
+						StreamNotificationsChannel: &ch.ID,
+					}
+					err := b.DBConnection.UpdateGuildNotificationChannels(msg.GuildID, channels)
+					if err != nil {
+						result = NiaResponseInternalError{
+							command:     commandName,
+							commandMsg:  msg.Content,
+							description: "Something unexpected went wrong whilst trying to write update to database",
+							data:        map[string]string{"Error": err.Error()},
+							timestamp:   time.Now(),
+						}
+					}
+				}
+			}
+		}
+	}
+	//Respond
+	result.WriteToLog()
+	resp := result.DiscordResponse()
+	msgRef := discordgo.MessageReference{
+		MessageID: msg.ID,
+		ChannelID: msg.ChannelID,
+		GuildID:   msg.GuildID,
+	}
+	resp.Reference = &msgRef
+	_, err = b.DiscordSession().ChannelMessageSendComplex(msg.ChannelID, resp)
+	if err != nil {
+		logrus.Errorf("Failed to send response to command due to error %v", err)
+	}
+}
+
 /**************************
 /     Utility Functions
 /**************************/

@@ -55,6 +55,42 @@ func (b *NiaBot) interpretRoleString(roleStr string, guildID string) (*discordgo
 	}
 }
 
+var chanRegex = regexp.MustCompile(`^\s*"?(?:<#(?P<ch_id>\d+)>)|#?(?P<ch_name>[\w_-]+)"?\s*$`)
+
+func (b *NiaBot) interpretChannelString(chanStr string, guildID string) (*discordgo.Channel, error) {
+	matches := chanRegex.FindStringSubmatch(chanStr)
+	switch {
+	case matches == nil:
+		return nil, fmt.Errorf("unrecognized channel identifier was provided")
+	case matches[chanRegex.SubexpIndex("ch_id")] != "":
+		//We have a channel link
+		chID := matches[chanRegex.SubexpIndex("ch_id")]
+		ch, err := b.DiscordSession().Channel(chID)
+		if err != nil {
+			logrus.Warnf("Failed to fetch data for channel %v whilst interpreting channel specifier %v due to error %v", chanStr, chanStr, err)
+			return nil, err
+		}
+		return ch, nil
+	case matches[chanRegex.SubexpIndex("ch_name")] != "":
+		//We have a channel name
+		chName := matches[chanRegex.SubexpIndex("ch_name")]
+		guildChannels, err := b.DiscordSession().GuildChannels(guildID)
+		if err != nil {
+			logrus.Warnf("Failed to fetch channel list for guild %v whilst interpreting channel specifier %v due to error %v", guildID, chanStr, err)
+			return nil, err
+		}
+		for _, ch := range guildChannels {
+			if ch.Name == chName {
+				//Found it \o/
+				return ch, nil
+			}
+		}
+		return nil, fmt.Errorf("couldn't find any channel called %v; it may be worth using a channel link", chName)
+	default:
+		return nil, fmt.Errorf("%v was not a valid channel string specifier", chanStr)
+	}
+}
+
 //This is kind of a mess and waay too greedy but the symbol other category doesn't seem to work with RE2 so eh ¯\_(ツ)_/¯
 //TODO: replace this with something better
 const unicodeEmojiRegex = `(\S{1,4})`

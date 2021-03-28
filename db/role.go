@@ -9,7 +9,7 @@ import (
 )
 
 //AddManagedRoleRule inserts a new managed role rule struct into the database
-func (db *DBConnection) AddManagedRoleRule(rule guildmodels.ManagedRoleRule) error {
+func (db *Connection) AddManagedRoleRule(rule guildmodels.ManagedRoleRule) error {
 	resp, err := rethink.Table(guildRolesTable).Insert(rule).RunWrite(db.session)
 	if err != nil {
 		logrus.Warnf("Encountered error inserting managed role  rule %v into database: %v.", rule, err)
@@ -23,7 +23,7 @@ func (db *DBConnection) AddManagedRoleRule(rule guildmodels.ManagedRoleRule) err
 
 //LookupNowLiveRoles returns a list of all roles in the given server which should be assigned when a member is online on a streaming
 //platform.
-func (db *DBConnection) LookupNowLiveRoles(guildID string) ([]guildmodels.ManagedRoleRule, error) {
+func (db *Connection) LookupNowLiveRoles(guildID string) ([]guildmodels.ManagedRoleRule, error) {
 	filter := map[string]interface{}{
 		"guild_id": guildID,
 		"role_assignment": map[string]interface{}{
@@ -52,7 +52,7 @@ func (db *DBConnection) LookupNowLiveRoles(guildID string) ([]guildmodels.Manage
 
 //LookupRolesByEmote takes a message ID as well as its channel and guild, along with an emoji ID.
 //It then returns any managed role rules that include that reaction.
-func (db *DBConnection) LookupRolesByEmote(msgID string, chanID string, guildID string, emojiID string) ([]guildmodels.ManagedRoleRule, error) {
+func (db *Connection) LookupRolesByEmote(msgID string, chanID string, guildID string, emojiID string) ([]guildmodels.ManagedRoleRule, error) {
 	filter := map[string]interface{}{
 		"guild_id": guildID,
 		"role_assignment": map[string]interface{}{
@@ -86,7 +86,7 @@ func (db *DBConnection) LookupRolesByEmote(msgID string, chanID string, guildID 
 
 //GetGuildRolesWithInitialReact takes a guild ID and returns a slice of all role assignment rules for that server
 //that both use reactions for role assignment and for which the bost should make an initial reaction.
-func (db *DBConnection) GetGuildRolesWithInitialReact(guildID string) ([]guildmodels.ManagedRoleRule, error) {
+func (db *Connection) GetGuildRolesWithInitialReact(guildID string) ([]guildmodels.ManagedRoleRule, error) {
 	filter := map[string]interface{}{
 		"guild_id": guildID,
 		"role_assignment": map[string]interface{}{
@@ -117,7 +117,7 @@ func (db *DBConnection) GetGuildRolesWithInitialReact(guildID string) ([]guildmo
 }
 
 //GetRoleRules returns all role assignment rules for a given role in a given server
-func (db *DBConnection) GetRoleRules(guildID string, roleID string) ([]guildmodels.ManagedRoleRule, error) {
+func (db *Connection) GetRoleRules(guildID string, roleID string) ([]guildmodels.ManagedRoleRule, error) {
 	filter := map[string]interface{}{
 		"guild_id": guildID,
 		"role_id":  roleID,
@@ -143,7 +143,7 @@ func (db *DBConnection) GetRoleRules(guildID string, roleID string) ([]guildmode
 }
 
 //IsManagedRole returns true iff we have any rules stored for the given roleID in the given guildID
-func (db *DBConnection) IsManagedRole(guildID string, roleID string) (bool, error) {
+func (db *Connection) IsManagedRole(guildID string, roleID string) (bool, error) {
 	filter := map[string]interface{}{
 		"guild_id": guildID,
 		"role_id":  roleID,

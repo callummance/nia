@@ -23,6 +23,8 @@ func (b *NiaBot) HandleMessage(msg *discordgo.MessageCreate) {
 			b.HandlePurgeRoleMessage(msg)
 		case "registertwitch":
 			b.HandleRegisterTwitchCommandMessage(msg)
+		case "setnotificationchannel":
+			b.HandleSetNotificationChannel(msg)
 		}
 
 	}
