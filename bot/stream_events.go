@@ -241,7 +241,7 @@ func (b *NiaBot) postAlerts(twitchUID, twitchName string, channels []string) ([]
 	notificationEmbed := discordgo.MessageEmbed{
 		Title:       stream.Title,
 		Type:        "rich",
-		Description: fmt.Sprintf("%v is playing %v for %d users", twitchName, stream.GameName, stream.ViewerCount),
+		Description: fmt.Sprintf("%v is streaming %v for %d users", twitchName, stream.GameName, stream.ViewerCount),
 		URL:         fmt.Sprintf("https://twitch.tv/%v", twitchName),
 		Timestamp:   stream.StartedAt.Format(time.RFC3339),
 		Color:       twitchColourHex,

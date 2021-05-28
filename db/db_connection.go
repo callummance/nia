@@ -21,6 +21,7 @@ type Connection struct {
 
 //Init creates a new connection pool for the database at the address provided by the relevant environment variable
 func Init() (*Connection, error) {
+	rethink.SetVerbose(true)
 	//Get DB name from env
 	dbName, exists := os.LookupEnv(dbNameEnvVar)
 	if !exists {

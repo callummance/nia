@@ -42,7 +42,7 @@ func (db *Connection) GetTwitchConnectionData(guildID, userID string) (*guildmod
 
 //GetAllTwitchUIDs returns a list of all twitch braodcaster UIDs that have been registered by members
 func (db *Connection) GetAllTwitchUIDs() ([]string, error) {
-	query := rethink.Table(membersTable).Field("tid")
+	query := rethink.Table(twitchTable).Field("tid")
 	res, err := query.Run(db.session)
 	defer res.Close()
 	if err != nil {
@@ -63,6 +63,7 @@ func (db *Connection) GetAllTwitchUIDs() ([]string, error) {
 
 //GetMemberByConnection looks up members by connection. The MemberConnections struct should have exactly one non-nil connection.
 func (db *Connection) GetMemberByConnection(connection guildmodels.MemberConnections, guildID, userID *string) ([]guildmodels.MemberData, error) {
+	rethink.SetVerbose(true)
 	//Check that exactly 1 connection is set
 	if connection.NumConnections() != 1 {
 		return nil, fmt.Errorf("member lookup requires exactly 1 connection, %d were provided", connection.NumConnections())
@@ -83,6 +84,14 @@ func (db *Connection) GetMemberByConnection(connection guildmodels.MemberConnect
 			return member.Field("id").Nth(1).Eq(*guildID)
 		})
 	}
+	//Join member data with twich data
+	query = query.Merge(func(p rethink.Term) interface{} {
+		return map[string]interface{}{
+			"connections": map[string]interface{}{
+				"twitch_link": rethink.Table(twitchTable).Get(p.Field("connections").Field("twitch_link")),
+			},
+		}
+	})
 	res, err := query.Run(db.session)
 	defer res.Close()
 	if err != nil {
@@ -127,7 +136,7 @@ func (db *Connection) SetTwitchConnectionData(guildID, userID, twitchUID string)
 		logrus.Warnf("Failed to get twitch connection data for member %v:%v due to error %v", guildID, userID, err)
 		return nil, nil, err
 	}
-	logrus.Debug("Got result %#v from twitch connection data update", res)
+	logrus.Tracef("Got result %#v from twitch connection data update", res)
 	changes := res.Changes
 	//If we got changes back from the DB query
 	if len(changes) >= 1 {
@@ -175,7 +184,7 @@ func (db *Connection) GetTwitchStream(uid string) (*guildmodels.TwitchStream, er
 		logrus.Warnf("Failed to get stream struct for twitch uid %v due to error %v", uid, err)
 		return nil, err
 	}
-	logrus.Debugf("Got result %#v from twitch connection data update", res)
+	logrus.Tracef("Got result %#v from twitch connection data update", res)
 	changes := res.Changes
 	if len(changes) >= 1 {
 		stream := changes[0].NewValue
@@ -218,11 +227,11 @@ func (db *Connection) DeleteTwitchStream(uid string) error {
 func (db *Connection) AddDiscordStatusPost(tid string, post *guildmodels.MessageRef) error {
 	_, err := rethink.Table(twitchTable).Get(tid).Update(func(t rethink.Term) interface{} {
 		return t.Merge(map[string]interface{}{
-			"posts": t.Field("posts").SetInsert(post),
+			"posts": t.Field("posts").Default([]interface{}{}).SetInsert(post),
 		})
 	}).RunWrite(db.session)
 	if err != nil {
-		logrus.Warn("Failed to insert discord status post %v into DB for twitch uid %v due to error %v", post, tid, err)
+		logrus.Warnf("Failed to insert discord status post %v into DB for twitch uid %v due to error %v", post, tid, err)
 		return err
 	}
 	return nil

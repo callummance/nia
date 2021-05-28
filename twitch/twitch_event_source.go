@@ -31,7 +31,7 @@ type subscription struct {
 //EventSource contains a handle to the twitch event listener as well as REST client
 type EventSource struct {
 	twitchClient      *nazuna.EventsubClient
-	liveSubscriptions map[string]*subscription
+	liveSubscriptions map[string]subscription
 	handler           EventHandler
 }
 
@@ -45,33 +45,16 @@ func StartTwitchListener(handler EventHandler, initChannelListeners []string) (*
 	}
 	client, err := nazuna.NewClient(*opts)
 	res := EventSource{
-		twitchClient: client,
-		handler:      handler,
+		twitchClient:      client,
+		liveSubscriptions: make(map[string]subscription, len(initChannelListeners)),
+		handler:           handler,
 	}
-
-	//Clear any old subscriptions
-	//TODO: instead of this, keep subscriptions going when bot is closed. This means that we will need to be able to autoremove events
-	//from unrecognized twitch UIDs as well as checking and resubscribing to events on initial load
-	//client.ClearSubscriptions()
 
 	//Register handlers
 	client.RegisterHandler(res.dispatchStreamOnlineEvent)
 	client.RegisterHandler(res.dispatchStreamOfflineEvent)
 
-	//Subscribe to any events provided
-	//for _, channelToListenFor := range initChannelListeners {
-	//	logrus.Debugf("Creating suscriptions for stream offline and online events for twitch user %v", channelToListenFor)
-	//	//Register stream.online subscription
-	//	client.CreateSubscription(messages.ConditionStreamOnline{
-	//		BroadcasterUID: channelToListenFor,
-	//	})
-	//	//Register stream.offline subscription
-	//	client.CreateSubscription(messages.ConditionStreamOffline{
-	//		BroadcasterUID: channelToListenFor,
-	//	})
-
 	//	//TODO: check their current state and generate online/offline event to adjust for changes whilst the bot is offline
-	//}
 
 	//Get current list of subscriptions from API and refresh any that need refreshing
 	err = res.refreshSubscriptions()
@@ -79,7 +62,7 @@ func StartTwitchListener(handler EventHandler, initChannelListeners []string) (*
 		logrus.Error("Failed to refresh twitch eventsub subscriptions")
 		return nil, err
 	}
-	err = res.syncSubscriptions(initChannelListeners)
+	err = res.SyncSubscriptions(initChannelListeners)
 	if err != nil {
 		logrus.Error("Failed to resync twitch eventsub subscriptions")
 		return nil, err
@@ -127,7 +110,7 @@ func (t *EventSource) SubscribeToStream(twitchUID string) error {
 			return err
 		}
 		//Save subscription details to map
-		t.liveSubscriptions[twitchUID] = &subscription{
+		t.liveSubscriptions[twitchUID] = subscription{
 			StreamOnlineSub:  onlineSub.Data[0].ID,
 			StreamOfflineSub: offlineSub.Data[0].ID,
 		}
@@ -161,6 +144,7 @@ func (t *EventSource) GetBroadcasterDeets(name string) (*restclient.TwitchUser, 
 
 //ClearSubscriptions attempts to unsubscribe from all current subscriptions
 func (t *EventSource) ClearSubscriptions() error {
+	t.liveSubscriptions = make(map[string]subscription)
 	err := t.twitchClient.ClearSubscriptions()
 	return err
 }
@@ -239,27 +223,33 @@ func (t *EventSource) refreshSubscriptions() error {
 				if err != nil {
 					logrus.Errorf("Failed to delete subscription %v whilst refreshing expired subscription due to error %v", subscription.Subscription, err)
 				}
-				condition := subscription.Subscription.Condition.(messages.ConditionStreamOnline)
+				condition := subscription.Subscription.Condition.(map[string]interface{})
+				bid := condition["broadcaster_user_id"].(string)
 				onlineSub, err := t.twitchClient.CreateSubscription(messages.ConditionStreamOnline{
-					BroadcasterUID: condition.BroadcasterUID,
+					BroadcasterUID: bid,
 				})
 				if err != nil {
 					logrus.Errorf("Failed to recreate subscription %v whilst refreshing expired subscription due to error %v", subscription.Subscription, err)
 				}
-				t.liveSubscriptions[condition.BroadcasterUID].StreamOnlineSub = onlineSub.Data[0].ID
+				orig := t.liveSubscriptions[bid]
+				orig.StreamOnlineSub = onlineSub.Data[0].ID
+				t.liveSubscriptions[bid] = orig
 			case "stream.offline":
 				err := t.twitchClient.DeleteSubscription(subscription.Subscription.ID)
 				if err != nil {
 					logrus.Errorf("Failed to delete subscription %v whilst refreshing expired subscription due to error %v", subscription.Subscription, err)
 				}
-				condition := subscription.Subscription.Condition.(messages.ConditionStreamOffline)
-				onlineSub, err := t.twitchClient.CreateSubscription(messages.ConditionStreamOffline{
-					BroadcasterUID: condition.BroadcasterUID,
+				condition := subscription.Subscription.Condition.(map[string]interface{})
+				bid := condition["broadcaster_user_id"].(string)
+				offlineSub, err := t.twitchClient.CreateSubscription(messages.ConditionStreamOffline{
+					BroadcasterUID: bid,
 				})
 				if err != nil {
 					logrus.Errorf("Failed to recreate subscription %v whilst refreshing expired subscription due to error %v", subscription.Subscription, err)
 				}
-				t.liveSubscriptions[condition.BroadcasterUID].StreamOfflineSub = onlineSub.Data[0].ID
+				orig := t.liveSubscriptions[bid]
+				orig.StreamOfflineSub = offlineSub.Data[0].ID
+				t.liveSubscriptions[bid] = orig
 			}
 		case "enabled":
 			fallthrough
@@ -268,27 +258,37 @@ func (t *EventSource) refreshSubscriptions() error {
 			logrus.Debugf("Adding already-live subscription %v to internal map", subscription.Subscription)
 			switch subscription.Subscription.Type {
 			case "stream.online":
-				condition := subscription.Subscription.Condition.(messages.ConditionStreamOnline)
-				t.liveSubscriptions[condition.BroadcasterUID].StreamOnlineSub = subscription.Subscription.ID
+				condition := subscription.Subscription.Condition.(map[string]interface{})
+				bid := condition["broadcaster_user_id"].(string)
+				orig := t.liveSubscriptions[bid]
+				orig.StreamOnlineSub = subscription.Subscription.ID
+				t.liveSubscriptions[bid] = orig
 			case "stream.offline":
-				condition := subscription.Subscription.Condition.(messages.ConditionStreamOffline)
-				t.liveSubscriptions[condition.BroadcasterUID].StreamOfflineSub = subscription.Subscription.ID
+				condition := subscription.Subscription.Condition.(map[string]interface{})
+				bid := condition["broadcaster_user_id"].(string)
+				orig := t.liveSubscriptions[bid]
+				orig.StreamOfflineSub = subscription.Subscription.ID
+				t.liveSubscriptions[bid] = orig
 			}
 		}
 	}
 	return nil
 }
 
-func (t *EventSource) syncSubscriptions(desiredSubscriptionUIDs []string) error {
-	subs := make(map[string]*struct {
+func (t *EventSource) SyncSubscriptions(desiredSubscriptionUIDs []string) error {
+	subs := make(map[string]struct {
 		IsRequested bool
 		IsLive      bool
 	}, len(desiredSubscriptionUIDs))
 	for k := range t.liveSubscriptions {
-		subs[k].IsLive = true
+		prev := subs[k]
+		prev.IsLive = true
+		subs[k] = prev
 	}
 	for _, s := range desiredSubscriptionUIDs {
-		subs[s].IsRequested = true
+		prev := subs[s]
+		prev.IsRequested = true
+		subs[s] = prev
 	}
 	for uid, status := range subs {
 		switch {
@@ -338,6 +338,11 @@ func getOptsFromEnv() (*nazuna.NazunaOpts, error) {
 		logrus.Warnf("`%v` env variable was not set.", serverHostnameEnvVar)
 		serverPort = ":8080"
 	}
+	permissive := false
+	logLevel, exists := os.LookupEnv("NIA_LOG_LEVEL")
+	if exists && (logLevel == "DEBUG" || logLevel == "TRACE") {
+		permissive = true
+	}
 	opts := nazuna.NazunaOpts{
 		WebhookPath:    "/twitchhook",
 		ListenOn:       serverPort,
@@ -346,6 +351,7 @@ func getOptsFromEnv() (*nazuna.NazunaOpts, error) {
 		Scopes:         nil,
 		Secret:         "",
 		ServerHostname: serverHostname,
+		Permissive:     permissive,
 	}
 	return &opts, nil
 }

@@ -45,6 +45,11 @@ func (db *Connection) GetOrCreateGuild(id string) (*guildmodels.DiscordGuild, er
 //AddAdminRole adds a roleID to the list of AdminRoles for the given guild. It returns the number of updated
 //entries as well as any errors
 func (db *Connection) AddAdminRole(gid string, roleID string) (int, error) {
+	err := db.ensureGuildExists(gid)
+	if err != nil {
+		logrus.Errorf("Failed to ensure creation of guild %v in database due to error %v", gid, err)
+		return 0, err
+	}
 	resp, err := rethink.Table(guildsTable).Get(gid).Update(map[string]interface{}{
 		"admin_roles": rethink.Row.Field("admin_roles").SetInsert(roleID),
 	}).RunWrite(db.session)
@@ -61,6 +66,11 @@ func (db *Connection) AddAdminRole(gid string, roleID string) (int, error) {
 
 //UpdateGuildNotificationChannels updates the notification channels assigned to a given guild stored in the database
 func (db *Connection) UpdateGuildNotificationChannels(gid string, notifChans guildmodels.NotificationChannels) error {
+	err := db.ensureGuildExists(gid)
+	if err != nil {
+		logrus.Errorf("Failed to ensure creation of guild %v in database due to error %v", gid, err)
+		return err
+	}
 	resp, err := rethink.Table(guildsTable).Get(gid).Update(map[string]interface{}{
 		"notification_channels": notifChans,
 	}).RunWrite(db.session)
@@ -73,4 +83,11 @@ func (db *Connection) UpdateGuildNotificationChannels(gid string, notifChans gui
 		return err
 	}
 	return nil
+}
+
+func (db *Connection) ensureGuildExists(gid string) error {
+	_, err := rethink.Table(guildsTable).Insert(map[string]interface{}{
+		"id": gid,
+	}).RunWrite(db.session)
+	return err
 }
