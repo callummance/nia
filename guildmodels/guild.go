@@ -3,8 +3,8 @@ package guildmodels
 //DiscordGuild contains configuration for a discord guild managed by this bot
 type DiscordGuild struct {
 	DiscordGID           string                `gorethink:"id"`
-	AdminRoles           []string              `gorethink:"admin_roles"`
-	NotificationChannels *NotificationChannels `gorethink:"notification_channels"`
+	AdminRoles           []string              `gorethink:"admin_roles,omitempty"`
+	NotificationChannels *NotificationChannels `gorethink:"notification_channels,omitempty"`
 }
 
 //NotificationChannels contains details on which channel each type of alert should be

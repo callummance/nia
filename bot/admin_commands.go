@@ -599,7 +599,7 @@ const handleSetNotificationChannelSyntax = "```" +
 	<channel> can either be the name of a channel or a link to the channel (eg. #channel)` +
 	"```"
 
-var setnotificationchannelRegex = regexp.MustCompile(`(twitch)\s*("?(?:<#(?:\d+)>)|#?(?:[\w_-]+)"?\s*)`)
+var setnotificationchannelRegex = regexp.MustCompile(`^\s*(twitch)\s*("?(?:<#(?:\d+)>)|#?(?:[\w_-]+)"?\s*)`)
 
 //HandleSetNotificationChannel handles a message from an admin setting a certain channel as the target for
 //alert messages
@@ -627,13 +627,13 @@ func (b *NiaBot) HandleSetNotificationChannel(msg *discordgo.MessageCreate) {
 	} else {
 		argString := strings.TrimPrefix(msg.Content, "!setnotificationchannel")
 		argString = strings.TrimLeft(argString, " ")
-		matches := regexHandleAddManagedRoleMessage.FindStringSubmatch(argString)
+		matches := setnotificationchannelRegex.FindStringSubmatch(argString)
 		if matches == nil {
 			result = NiaResponseSyntaxError{
 				command:     commandName,
 				commandMsg:  msg.Content,
 				description: fmt.Sprintf("*%v* doesn't seem to be the correct syntax for an !setnotificationchannel command", argString),
-				syntax:      handleAddManagedRoleSyntax,
+				syntax:      handleSetNotificationChannelSyntax,
 				timestamp:   time.Now(),
 			}
 		} else {
@@ -647,7 +647,7 @@ func (b *NiaBot) HandleSetNotificationChannel(msg *discordgo.MessageCreate) {
 					timestamp:   time.Now(),
 				}
 			} else {
-				switch matches[2] {
+				switch matches[1] {
 				case "twitch":
 					channels := guildmodels.NotificationChannels{
 						StreamNotificationsChannel: &ch.ID,
@@ -661,6 +661,20 @@ func (b *NiaBot) HandleSetNotificationChannel(msg *discordgo.MessageCreate) {
 							data:        map[string]string{"Error": err.Error()},
 							timestamp:   time.Now(),
 						}
+					} else {
+						result = NiaResponseSuccess{
+							command:    commandName,
+							commandMsg: msg.Content,
+							timestamp:  time.Now(),
+						}
+					}
+				default:
+					result = NiaResponseSyntaxError{
+						command:     commandName,
+						commandMsg:  msg.Content,
+						description: fmt.Sprintf("%v is not a valid notification channel type.", matches[1]),
+						syntax:      handleSetNotificationChannelSyntax,
+						timestamp:   time.Now(),
 					}
 				}
 			}
@@ -676,6 +690,82 @@ func (b *NiaBot) HandleSetNotificationChannel(msg *discordgo.MessageCreate) {
 	}
 	resp.Reference = &msgRef
 	_, err = b.DiscordSession().ChannelMessageSendComplex(msg.ChannelID, resp)
+	if err != nil {
+		logrus.Errorf("Failed to send response to command due to error %v", err)
+	}
+}
+
+//HandleResetTwitchEventsub unsubscribes from all twitch eventsub events then recreates subscriptions for every
+//subscribed stream in the database
+func (b *NiaBot) HandleResetTwitchEventsub(msg *discordgo.MessageCreate) {
+	commandName := "!resettwitcheventsub"
+	var result NiaResponse
+	//Check sender is admin
+	isFromAdmin := isDev(msg.Author.ID)
+	if !isFromAdmin {
+		errorTxt := "The !setnotificationchannel command can only be run by admins."
+		result = NiaResponseNotAllowed{
+			command:     commandName,
+			commandMsg:  msg.Content,
+			description: errorTxt,
+			timestamp:   time.Now(),
+		}
+	} else {
+		t, errResp := b.getTwitchClient(commandName, msg.Content)
+		if errResp != nil {
+			result = errResp
+		} else {
+			err := t.ClearSubscriptions()
+			if err != nil {
+				result = NiaResponseInternalError{
+					command:     commandName,
+					commandMsg:  msg.Content,
+					description: "Failed to clear eventsub subscriptions",
+					data:        map[string]string{"Error:": err.Error()},
+					timestamp:   time.Now(),
+				}
+			} else {
+				twitchUIDs, err := b.DBConnection.GetAllTwitchUIDs()
+				logrus.Debugf("Reinitializing twitch subscriptions for UIDs %v", twitchUIDs)
+				if err != nil {
+					result = NiaResponseInternalError{
+						command:     commandName,
+						commandMsg:  msg.Content,
+						description: "Failed to retrieve list of required twitch streams",
+						data:        map[string]string{"Error:": err.Error()},
+						timestamp:   time.Now(),
+					}
+				} else {
+					err := t.SyncSubscriptions(twitchUIDs)
+					if err != nil {
+						result = NiaResponseInternalError{
+							command:     commandName,
+							commandMsg:  msg.Content,
+							description: "Failed to reinitialize twitch eventsub subscriptions",
+							data:        map[string]string{"Error:": err.Error()},
+							timestamp:   time.Now(),
+						}
+					} else {
+						result = NiaResponseSuccess{
+							command:    commandName,
+							commandMsg: msg.Content,
+							timestamp:  time.Now(),
+						}
+					}
+				}
+			}
+		}
+	}
+	//Respond
+	result.WriteToLog()
+	resp := result.DiscordResponse()
+	msgRef := discordgo.MessageReference{
+		MessageID: msg.ID,
+		ChannelID: msg.ChannelID,
+		GuildID:   msg.GuildID,
+	}
+	resp.Reference = &msgRef
+	_, err := b.DiscordSession().ChannelMessageSendComplex(msg.ChannelID, resp)
 	if err != nil {
 		logrus.Errorf("Failed to send response to command due to error %v", err)
 	}

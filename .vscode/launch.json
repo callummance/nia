@@ -16,7 +16,7 @@
                 "followPointers": true,
                 "maxVariableRecurse": 1,
                 "maxStringLen": 512,
-                "maxArrayValues": 64,
+                "maxArrayValues": 512,
                 "maxStructFields": -1
             }
         }

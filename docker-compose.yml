@@ -10,6 +10,11 @@ services:
       - NIA_DISCORD_BOT_TOKEN
       - NIA_DB_NAME
       - NIA_DISCORD_DEV_UID
+      - NIA_LOG_LEVEL=WARN
+      - NIA_TWITCH_CLIENT_ID
+      - NIA_TWITCH_CLIENT_SECRET
+      - NIA_TWITCH_SERVER_WH_LISTEN_PORT=:8080
+      - NIA_TWITCH_SERVER_HOSTNAME=niatest.twintailsare.moe
     depends_on: [rethinkdb]
     restart: unless-stopped
 
@@ -38,6 +43,35 @@ services:
     secrets:
       - ssh_password
 
+  swag:
+    image: ghcr.io/linuxserver/swag
+    container_name: swag
+    cap_add:
+      - NET_ADMIN
+    environment: 
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/London
+      - URL=twintailsare.moe
+      - SUBDOMAINS=nia,niatest,
+      - VALIDATION=dns
+      - DNSPLUGIN=cloudflare
+      - FILE__EMAIL=/run/secrets/email
+      - CERTPROVIDER=zerossl
+    volumes:
+      - ./conf/cloudflare.ini:/config/dns-conf/cloudflare.ini
+      - ./conf/nginx.conf:/config/nginx/site-confs/default
+    ports:
+      - 443:443
+      - 80:80
+    restart: unless-stopped
+    secrets: 
+      - email
+    depends_on:
+      - nia
+    
 secrets:
   ssh_password:
-    file: "./ssh_pass.conf"
+    file: "./conf/ssh_pass.conf"
+  email:
+    file: "./conf/email.conf"

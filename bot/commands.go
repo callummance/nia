@@ -25,6 +25,8 @@ func (b *NiaBot) HandleMessage(msg *discordgo.MessageCreate) {
 			b.HandleRegisterTwitchCommandMessage(msg)
 		case "setnotificationchannel":
 			b.HandleSetNotificationChannel(msg)
+		case "resettwitcheventsub":
+			b.HandleResetTwitchEventsub(msg)
 		}
 
 	}
