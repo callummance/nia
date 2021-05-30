@@ -50,7 +50,7 @@ func Init() (*Connection, error) {
 		session: session,
 	}
 
-	//Ensure database and required tables exist
+	//Ensure database and required tables exist, and wait for it all to be ready
 	res.CreateDatabase(dbName)
 	res.CreateTables()
 
@@ -93,6 +93,22 @@ func (db *Connection) CreateTables() {
 	if err != nil {
 		logrus.Warnf("Failed to create twitch streams table due to error %v", err)
 	}
+	//Wait for all tables
+	rethink.Table(guildsTable).Wait()
+	rethink.Table(guildRolesTable).Wait()
+	rethink.Table(membersTable).Wait()
+	rethink.Table(twitchTable).Wait()
+}
+
+func (db *Connection) WaitTablesRead() {
+	waitOpts := rethink.WaitOpts{
+		WaitFor: "ready_for_reads",
+	}
+	rethink.Table(guildsTable).Wait(waitOpts)
+	rethink.Table(guildRolesTable).Wait(waitOpts)
+	rethink.Table(membersTable).Wait(waitOpts)
+	rethink.Table(twitchTable).Wait(waitOpts)
+
 }
 
 //CreateDatabase ensures the nia database exists
@@ -101,4 +117,5 @@ func (db *Connection) CreateDatabase(dbName string) {
 	if err != nil {
 		logrus.Warnf("Failed to create %v DB due to error %v", dbName, err)
 	}
+	rethink.DB(dbName).Wait()
 }

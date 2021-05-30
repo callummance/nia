@@ -88,6 +88,10 @@ func (db *Connection) UpdateGuildNotificationChannels(gid string, notifChans gui
 func (db *Connection) ensureGuildExists(gid string) error {
 	_, err := rethink.Table(guildsTable).Insert(map[string]interface{}{
 		"id": gid,
+	}, rethink.InsertOpts{
+		Conflict: func(id, oldDoc, newDoc rethink.Term) interface{} {
+			return oldDoc
+		},
 	}).RunWrite(db.session)
 	return err
 }
