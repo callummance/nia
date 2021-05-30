@@ -10,11 +10,11 @@ services:
       - NIA_DISCORD_BOT_TOKEN
       - NIA_DB_NAME
       - NIA_DISCORD_DEV_UID
-      - NIA_LOG_LEVEL=WARN
+      - NIA_LOG_LEVEL=TRACE
       - NIA_TWITCH_CLIENT_ID
       - NIA_TWITCH_CLIENT_SECRET
       - NIA_TWITCH_SERVER_WH_LISTEN_PORT=:8080
-      - NIA_TWITCH_SERVER_HOSTNAME=niatest.twintailsare.moe
+      - NIA_TWITCH_SERVER_HOSTNAME
     depends_on: [rethinkdb]
     restart: unless-stopped
 

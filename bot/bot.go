@@ -36,6 +36,7 @@ func Init() (*NiaBot, error) {
 	}
 
 	//Try to start twitch connection
+	db.WaitTablesRead()
 	twitchUIDs, err := db.GetAllTwitchUIDs()
 	if err != nil {
 		logrus.Errorf("Failed to initialize twitch listener due to error %v. Continuing without twitch functionality.", err)

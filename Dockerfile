@@ -10,4 +10,5 @@ FROM alpine:latest
 RUN apk add --no-cache ca-certificates bash libc6-compat
 WORKDIR /root
 COPY --from=builder /go/src/github.com/callummance/nia/nia .
-CMD ["./nia"]
+COPY ./container-scripts/start_nia.sh ./start_nia.sh
+CMD ["./start_nia.sh"]
