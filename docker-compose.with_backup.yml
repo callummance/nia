@@ -1,0 +1,13 @@
+version: "3.6"
+services:
+  backup:
+    image: ghcr.io/callummance/mako
+    environment:
+      - CLUSTER_ADDR=rethinkdb
+      - B2_KEY_ID
+      - B2_KEY
+      - B2_BUCKET
+      - DAILY_BACKUPS
+      - WEEKLY_BACKUPS
+    depends_on: [rethinkdb]
+    restart: unless-stopped
